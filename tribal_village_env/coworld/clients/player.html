@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tribal Village Player</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    body { margin: 0; background: #101412; color: #e7ece4; }
+    main { display: grid; grid-template-columns: minmax(280px, 1fr) 280px; min-height: 100vh; }
+    canvas { width: 100%; height: 100vh; image-rendering: pixelated; display: block; background: #1c211c; }
+    aside { border-left: 1px solid #2b332e; padding: 12px; display: grid; align-content: start; gap: 12px; }
+    h1 { margin: 0; font-size: 16px; }
+    .stat { color: #b8c7bb; font-size: 13px; }
+    .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    button, select { background: #232a25; color: #e7ece4; border: 1px solid #405045; min-height: 34px; }
+    button:hover, select:hover { border-color: #91b49c; }
+    @media (max-width: 760px) {
+      main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+      canvas { height: calc(100vh - 180px); }
+      aside { border-left: 0; border-top: 1px solid #2b332e; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="obs" width="22" height="22"></canvas>
+    <aside>
+      <h1 id="name">Agent</h1>
+      <div class="stat" id="tick">tick 0</div>
+      <div class="stat" id="reward">reward 0</div>
+      <select id="verb">
+        <option value="0">Noop</option>
+        <option value="1" selected>Move</option>
+        <option value="2">Attack</option>
+        <option value="3">Use</option>
+        <option value="4">Swap</option>
+        <option value="5">Give</option>
+        <option value="6">Lantern</option>
+        <option value="7">Plant</option>
+      </select>
+      <div class="buttons" id="dirs"></div>
+    </aside>
+  </main>
+  <script>
+    const canvas = document.getElementById("obs");
+    const ctx = canvas.getContext("2d");
+    const nameEl = document.getElementById("name");
+    const tickEl = document.getElementById("tick");
+    const rewardEl = document.getElementById("reward");
+    const verbEl = document.getElementById("verb");
+    const dirsEl = document.getElementById("dirs");
+    const directions = ["N", "S", "W", "E", "NW", "NE", "SW", "SE"];
+    let ws;
+
+    function sendAction(argument) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const verb = Number(verbEl.value);
+      ws.send(JSON.stringify({type: "action", action: verb * 8 + argument}));
+    }
+
+    directions.forEach((label, index) => {
+      const button = document.createElement("button");
+      button.textContent = label;
+      button.onclick = () => sendAction(index);
+      dirsEl.appendChild(button);
+    });
+
+    function drawView(view) {
+      if (!view || view.kind !== "rgb_window" || !Array.isArray(view.data)) return;
+      if (canvas.width !== view.width || canvas.height !== view.height) {
+        canvas.width = view.width;
+        canvas.height = view.height;
+      }
+      const pixels = new Uint8ClampedArray(view.width * view.height * 4);
+      for (let i = 0, j = 0; i < view.data.length; i += 3, j += 4) {
+        pixels[j] = view.data[i];
+        pixels[j + 1] = view.data[i + 1];
+        pixels[j + 2] = view.data[i + 2];
+        pixels[j + 3] = 255;
+      }
+      ctx.putImageData(new ImageData(pixels, view.width, view.height), 0, 0);
+    }
+
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/player${location.search}`);
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      nameEl.textContent = message.name || `Agent ${message.slot}`;
+      tickEl.textContent = `tick ${message.tick}/${message.max_steps}`;
+      rewardEl.textContent = `reward ${Number(message.score || 0).toFixed(2)}`;
+      drawView(message.view);
+    };
+  </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 ## Ultra-Fast Direct Buffer Interface
 ## Zero-copy numpy buffer communication - no conversions
 
+import vmath
 import environment, external_actions
 
 type
@@ -122,6 +123,27 @@ proc tribal_village_reset_and_get_obs(
   except:
     return 0
 
+proc tribal_village_reset_for_coworld(
+  env: pointer,
+  rewards_buffer: ptr UncheckedArray[float32],
+  terminals_buffer: ptr UncheckedArray[uint8],
+  truncations_buffer: ptr UncheckedArray[uint8]
+): int32 {.exportc, dynlib.} =
+  ## Reset for Coworld runtime without exporting neural observation tensors.
+  if globalEnv == nil:
+    return 0
+
+  try:
+    discard env
+    globalEnv.reset()
+    for i in 0..<MapAgents:
+      rewards_buffer[i] = 0.0
+      terminals_buffer[i] = 0
+      truncations_buffer[i] = 0
+    return 1
+  except:
+    return 0
+
 proc tribal_village_step_with_pointers(
   env: pointer,
   actions_buffer: ptr UncheckedArray[uint8],    # [MapAgents] direct read
@@ -161,6 +183,38 @@ proc tribal_village_step_with_pointers(
   except:
     return 0
 
+proc tribal_village_step_for_coworld(
+  env: pointer,
+  actions_buffer: ptr UncheckedArray[uint8],
+  rewards_buffer: ptr UncheckedArray[float32],
+  terminals_buffer: ptr UncheckedArray[uint8],
+  truncations_buffer: ptr UncheckedArray[uint8]
+): int32 {.exportc, dynlib.} =
+  ## Step for Coworld runtime without copying observation tensors.
+  if globalEnv == nil:
+    return 0
+
+  try:
+    discard env
+    var actions: array[MapAgents, uint8]
+    for i in 0..<MapAgents:
+      actions[i] = actions_buffer[i]
+
+    globalEnv.step(unsafeAddr actions)
+
+    for i in 0..<MapAgents:
+      let agent = (if i < globalEnv.agents.len: globalEnv.agents[i] else: nil)
+      let reward = if agent.isNil: 0.0'f32 else: agent.reward
+      rewards_buffer[i] = reward
+      if not agent.isNil:
+        agent.reward = 0.0'f32
+      terminals_buffer[i] = if globalEnv.terminated[i] > 0.0: 1 else: 0
+      truncations_buffer[i] = if globalEnv.truncated[i] > 0.0: 1 else: 0
+
+    return 1
+  except:
+    return 0
+
 proc tribal_village_get_num_agents(): int32 {.exportc, dynlib.} =
   return MapAgents.int32
 
@@ -176,6 +230,26 @@ proc tribal_village_get_map_width(): int32 {.exportc, dynlib.} =
 
 proc tribal_village_get_map_height(): int32 {.exportc, dynlib.} =
   return MapHeight.int32
+
+proc tribal_village_get_agent_x(
+  env: pointer,
+  agent_id: int32
+): int32 {.exportc, dynlib.} =
+  discard env
+  let idx = agent_id.int
+  if globalEnv == nil or idx < 0 or idx >= globalEnv.agents.len:
+    return -1
+  return globalEnv.agents[idx].pos.x
+
+proc tribal_village_get_agent_y(
+  env: pointer,
+  agent_id: int32
+): int32 {.exportc, dynlib.} =
+  discard env
+  let idx = agent_id.int
+  if globalEnv == nil or idx < 0 or idx >= globalEnv.agents.len:
+    return -1
+  return globalEnv.agents[idx].pos.y
 
 # Render full map as HxWx3 RGB (uint8)
 proc toByte(value: float32): uint8 =

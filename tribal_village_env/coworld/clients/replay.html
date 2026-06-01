@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tribal Village Replay</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    body { margin: 0; background: #101412; color: #e7ece4; }
+    main { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+    header { display: flex; gap: 18px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #2b332e; }
+    h1 { margin: 0; font-size: 16px; font-weight: 700; }
+    .stat { color: #b8c7bb; font-size: 13px; }
+    canvas { width: 100%; height: calc(100vh - 43px); image-rendering: pixelated; display: block; background: #1c211c; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Tribal Village Replay</h1>
+      <div class="stat" id="tick">tick 0</div>
+      <div class="stat" id="scores"></div>
+    </header>
+    <canvas id="world" width="192" height="108"></canvas>
+  </main>
+  <script>
+    const canvas = document.getElementById("world");
+    const ctx = canvas.getContext("2d");
+    const tick = document.getElementById("tick");
+    const scores = document.getElementById("scores");
+
+    function drawFrame(frame) {
+      if (!frame || frame.kind !== "rgb") return;
+      if (canvas.width !== frame.width || canvas.height !== frame.height) {
+        canvas.width = frame.width;
+        canvas.height = frame.height;
+      }
+      const pixels = new Uint8ClampedArray(frame.width * frame.height * 4);
+      for (let i = 0, j = 0; i < frame.data.length; i += 3, j += 4) {
+        pixels[j] = frame.data[i];
+        pixels[j + 1] = frame.data[i + 1];
+        pixels[j + 2] = frame.data[i + 2];
+        pixels[j + 3] = 255;
+      }
+      ctx.putImageData(new ImageData(pixels, frame.width, frame.height), 0, 0);
+    }
+
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/replay${location.search}`);
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      tick.textContent = `tick ${message.tick}/${message.max_steps}`;
+      if (message.team_scores) {
+        scores.textContent = message.team_scores.map((v, i) => `T${i}:${Number(v).toFixed(1)}`).join(" ");
+      }
+      drawFrame(message.frame);
+    };
+  </script>
+</body>
+</html>

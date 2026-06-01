@@ -4,7 +4,7 @@ include *.dll
 include libtribal_village.so
 include LICENSE
 include README.md
-recursive-include tribal_village_env *.py
+recursive-include tribal_village_env *.py *.html *.md
 recursive-include tribal_village_env libtribal_village.*
 recursive-include src *.nim
 recursive-include data *

@@ -38,6 +38,21 @@ tribal-village play
 CoGames has been retired upstream in favor of Coworld. The legacy train command is disabled unless a compatible local
 training stack is present.
 
+## Coworld
+
+Tribal Village now ships a Coworld package surface with 48 player slots, one slot per agent. Build and run it with the
+current `coworld` CLI from the Metta repository:
+
+```bash
+uv run coworld build compose.yaml coworld_manifest_template.json 0.1.0 tmp/tribal_village/coworld_manifest.json
+uv run coworld certify tmp/tribal_village/coworld_manifest.json
+uv run coworld play tmp/tribal_village/coworld_manifest.json
+```
+
+The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
+`COWORLD_PLAYER_WS_URL`, receive a rendered RGB window around their assigned agent, and send one discrete action in
+`0..63`.
+
 ## Configuration (Python)
 
 Pass a config dict to the Python wrapper (rendering + gameplay tuning):
@@ -142,6 +157,6 @@ Discrete 64 (`verb * 8 + argument`), where the argument is a direction (0..7):
 
 **Nim**: 2.2.10+ with boxy, windy, vmath, chroma (installed via `nimby sync -g nimby.lock`)
 
-**Python**: 3.12.x with gymnasium, numpy, pufferlib-core (pulled via `pip install -e .`)
+**Python**: 3.12.x with numpy. Install `.[pufferlib]` only when using the legacy PufferLib training wrapper.
 
 **System**: OpenGL for rendering

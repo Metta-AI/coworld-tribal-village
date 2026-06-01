@@ -1,0 +1,6 @@
+services:
+  tribal-village:
+    image: coworld-tribal-village:latest
+    platform: linux/amd64
+    build:
+      context: .

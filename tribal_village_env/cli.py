@@ -8,7 +8,6 @@ import typer
 from rich.console import Console
 
 from tribal_village_env.build import ensure_nim_library_current
-from tribal_village_env.environment import TribalVillageEnv
 
 # Optional CoGames training integration
 try:
@@ -45,6 +44,8 @@ def _run_gui() -> None:
 
 
 def _run_ansi(steps: int, max_steps: Optional[int], random_actions: bool) -> None:
+    from tribal_village_env.environment import TribalVillageEnv
+
     config: dict[str, object] = {"render_mode": "ansi"}
     if max_steps is not None:
         config["max_steps"] = max_steps

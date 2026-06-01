@@ -12,8 +12,6 @@ authors = [{ name = "Metta AI", email = "info@metta.ai" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "numpy>=2.4.6",
-  "gymnasium>=1.3.0",
-  "pufferlib-core>=3.0.23",
   "typer>=0.26.5",
   "rich>=15.0.0",
 ]
@@ -30,13 +28,29 @@ Repository = "https://github.com/Metta-AI/coworld-tribal-village.git"
 
 [project.optional-dependencies]
 cogames = []
+pufferlib = [
+  "gymnasium>=1.3.0",
+  "pufferlib-core>=3.0.23",
+]
+coworld = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "websockets>=15.0.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["tribal_village_env*"]
 
 [tool.setuptools.package-data]
-tribal_village_env = ["*.so", "*.dylib", "*.dll", "libtribal_village.*"]
+tribal_village_env = [
+  "*.so",
+  "*.dylib",
+  "*.dll",
+  "libtribal_village.*",
+  "coworld/clients/*.html",
+  "coworld/docs/*.md",
+]
 
 [tool.uv]
 cache-keys = [
