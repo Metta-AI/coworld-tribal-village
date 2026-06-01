@@ -2,15 +2,14 @@ metta
 tribal_village
 PufferLib
 resources
-gemset/
 src/tmp/
 src/mettascope.out
 bindings/generated/
 mettascope2/dist/
 mettascope2/data/fidget/
 data/fidget/
-!data/inventory/
-!data/inventory/*.png
+!data/resources/
+!data/resources/*.png
 uv.lock
 
 # Dynamic libraries (platform-specific compiled binaries)
@@ -112,5 +111,3 @@ nimble.develop
 nimble.paths
 nim.cfg
 .envrc
-
-.DS_Store

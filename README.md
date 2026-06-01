@@ -56,7 +56,7 @@ config = {
     'tumor_spawn_rate': 0.1,
     'heart_reward': 1.0,
     'ore_reward': 0.1,
-    'bar_reward': 0.8,
+    'battery_reward': 0.8,
     'wood_reward': 0.0,
     'water_reward': 0.0,
     'wheat_reward': 0.0,
@@ -105,7 +105,7 @@ These gameplay settings map to `EnvironmentConfig` in `src/environment.nim`.
 21 layers, 11x11 grid per agent:
 
 - **Layer 0**: Team-aware agent presence (1..8=teams, 255=Tumor)
-- **Layers 1-9**: Agent orientation + inventories (ore, bar, water, wheat, wood, spear, lantern, armor)
+- **Layers 1-9**: Agent orientation + inventories (ore, battery, water, wheat, wood, spear, lantern, armor)
 - **Layers 10-18**: Walls/mines/converters/assemblers + ready/resource status
 - **Layers 19-20**: Action tint (combat/heal/freeze) + bread inventory
 

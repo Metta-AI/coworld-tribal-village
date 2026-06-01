@@ -3,7 +3,7 @@
 ## Controller type is specified when creating the environment
 
 import std/os, std/strutils
-import ./environment, ai, common
+import environment, ai, common
 
 type
   ControllerType* = enum

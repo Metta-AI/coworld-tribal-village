@@ -1,7 +1,7 @@
 ## Ultra-Fast Direct Buffer Interface
 ## Zero-copy numpy buffer communication - no conversions
 
-import ./environment, external_actions
+import environment, external_actions
 
 type
   ## C-compatible environment config passed from Python.
@@ -11,7 +11,7 @@ type
     tumorSpawnRate*: float32
     heartReward*: float32
     oreReward*: float32
-    barReward*: float32
+    batteryReward*: float32
     woodReward*: float32
     waterReward*: float32
     wheatReward*: float32
@@ -38,7 +38,7 @@ proc applyConfig(cfg: CEnvironmentConfig): EnvironmentConfig =
   applyFloat(tumorSpawnRate, cfg.tumorSpawnRate)
   applyFloat(heartReward, cfg.heartReward)
   applyFloat(oreReward, cfg.oreReward)
-  applyFloat(barReward, cfg.barReward)
+  applyFloat(batteryReward, cfg.batteryReward)
   applyFloat(woodReward, cfg.woodReward)
   applyFloat(waterReward, cfg.waterReward)
   applyFloat(wheatReward, cfg.wheatReward)
@@ -56,23 +56,15 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   # Matches previous hardcoded RGB choices for renderer export.
   (r: 255'u8, g: 255'u8, b: 0'u8),    # Agent
   (r: 96'u8,  g: 96'u8,  b: 96'u8),   # Wall
-  (r: 34'u8,  g: 139'u8, b: 34'u8),   # TreeObject
   (r: 184'u8, g: 134'u8, b: 11'u8),   # Mine
   (r: 0'u8,   g: 200'u8, b: 200'u8),  # Converter
   (r: 220'u8, g: 0'u8,   b: 220'u8),  # assembler
   (r: 255'u8, g: 170'u8, b: 0'u8),    # Spawner
   (r: 160'u8, g: 32'u8,  b: 240'u8),  # Tumor
-  (r: 230'u8, g: 230'u8, b: 230'u8),  # Cow
   (r: 255'u8, g: 120'u8, b: 40'u8),   # Armory
   (r: 255'u8, g: 80'u8,  b: 0'u8),    # Forge
   (r: 255'u8, g: 180'u8, b: 120'u8),  # ClayOven
   (r: 0'u8,   g: 180'u8, b: 255'u8),  # WeavingLoom
-  (r: 190'u8, g: 160'u8, b: 220'u8),  # Bed
-  (r: 210'u8, g: 180'u8, b: 120'u8),  # Chair
-  (r: 200'u8, g: 150'u8, b: 90'u8),   # Table
-  (r: 160'u8, g: 160'u8, b: 160'u8),  # Statue
-  (r: 120'u8, g: 120'u8, b: 140'u8),  # WatchTower
-  (r: 150'u8, g: 110'u8, b: 60'u8),   # Barrel
   (r: 255'u8, g: 240'u8, b: 128'u8)   # PlantedLantern
 ]
 

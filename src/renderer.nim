@@ -1,7 +1,6 @@
 import
   boxy, vmath, windy, tables,
-  std/[algorithm, math, strutils],
-  common, environment, assets
+  common, environment
 
 # Infection system constants
 const
@@ -12,52 +11,11 @@ const
 
 var
   heartCountImages: Table[int, string] = initTable[int, string]()
-  infoLabelImages: Table[string, string] = initTable[string, string]()
-  doorSpriteKey* = "map/wall"
-
-proc setDoorSprite*(key: string) =
-  doorSpriteKey = key
 
 template configureHeartFont(ctx: var Context) =
   ctx.font = HeartCountFontPath
   ctx.fontSize = HeartCountFontSize
   ctx.textBaseline = TopBaseline
-
-const
-  InfoLabelFontPath = HeartCountFontPath
-  InfoLabelFontSize: float32 = 54
-  InfoLabelPadding = 18
-  InfoLabelInsetX = 100
-  InfoLabelInsetY = 50
-
-template configureInfoLabelFont(ctx: var Context) =
-  ctx.font = InfoLabelFontPath
-  ctx.fontSize = InfoLabelFontSize
-  ctx.textBaseline = TopBaseline
-
-proc ensureInfoLabel(text: string): string =
-  if text.len == 0:
-    return ""
-  if text in infoLabelImages:
-    return infoLabelImages[text]
-
-  var measureCtx = newContext(1, 1)
-  configureInfoLabelFont(measureCtx)
-  let metrics = measureCtx.measureText(text)
-  let labelWidth = max(1, metrics.width.int + InfoLabelPadding * 2)
-  let labelHeight = max(1, measureCtx.fontSize.int + InfoLabelPadding * 2)
-
-  var ctx = newContext(labelWidth, labelHeight)
-  configureInfoLabelFont(ctx)
-  ctx.fillStyle.color = color(0, 0, 0, 0.6)
-  ctx.fillRect(0, 0, labelWidth.float32, labelHeight.float32)
-  ctx.fillStyle.color = color(1, 1, 1, 1)
-  ctx.fillText(text, vec2(InfoLabelPadding.float32, InfoLabelPadding.float32))
-
-  let key = "ui/selection_label/" & text.replace(" ", "_").replace("/", "_")
-  bxy.addImage(key, ctx.image, mipmaps = false)
-  infoLabelImages[text] = key
-  result = key
 
 proc getInfectionLevel*(pos: IVec2): float32 =
   ## Simple infection level based on color temperature
@@ -92,7 +50,6 @@ proc useSelections*() =
         gridPos = (mousePos + vec2(0.5, 0.5)).ivec2
       if gridPos.x >= 0 and gridPos.x < MapWidth and
          gridPos.y >= 0 and gridPos.y < MapHeight:
-        selectedPos = gridPos
         let thing = env.grid[gridPos.x][gridPos.y]
         if thing != nil:
           selection = thing
@@ -108,16 +65,12 @@ proc drawFloor*() =
     for y in 0 ..< MapHeight:
 
       let tileColor = env.tileColors[x][y]
-      let floorSprite = case env.biomes[x][y]
-        of BiomeCavesType: "map/cave_floor"
-        of BiomeDungeonType: "map/dungeon_floor"
-        else: "map/floor"
 
       let finalR = min(tileColor.r * tileColor.intensity, 1.5)
       let finalG = min(tileColor.g * tileColor.intensity, 1.5)
       let finalB = min(tileColor.b * tileColor.intensity, 1.5)
 
-      bxy.drawImage(floorSprite, ivec2(x, y).vec2, angle = 0, scale = 1/200, tint = color(finalR, finalG, finalB, 1.0))
+      bxy.drawImage("objects/floor", ivec2(x, y).vec2, angle = 0, scale = 1/200, tint = color(finalR, finalG, finalB, 1.0))
 
 proc drawTerrain*() =
   for x in 0 ..< MapWidth:
@@ -128,40 +81,15 @@ proc drawTerrain*() =
 
       case env.terrain[x][y]
       of Wheat:
-        bxy.drawImage(mapSpriteKey("wheat"), pos.vec2, angle = 0, scale = 1/200)
+        bxy.drawImage("objects/wheat_field", pos.vec2, angle = 0, scale = 1/200)
         drawOverlayIf(infected, getInfectionSprite("wheat"), pos.vec2)
       of Tree:
-        bxy.drawImage(mapSpriteKey("pine"), pos.vec2, angle = 0, scale = 1/200)
-        drawOverlayIf(infected, getInfectionSprite("tree"), pos.vec2)
-      of Palm:
-        bxy.drawImage(mapSpriteKey("palm"), pos.vec2, angle = 0, scale = 1/200)
+        bxy.drawImage("objects/palm_tree", pos.vec2, angle = 0, scale = 1/200)
         drawOverlayIf(infected, getInfectionSprite("tree"), pos.vec2)
       of Bridge:
-        bxy.drawImage(mapSpriteKey("bridge"), pos.vec2, angle = 0, scale = 1/200)
-      of Road:
-        bxy.drawImage(mapSpriteKey("road"), pos.vec2, angle = 0, scale = 1/200)
+        bxy.drawImage("objects/bridge", pos.vec2, angle = 0, scale = 1/200)
       of Fertile:
-        bxy.drawImage(mapSpriteKey("fertile"), pos.vec2, angle = 0, scale = 1/200)
-      of Rock:
-        bxy.drawImage(mapSpriteKey("rock"), pos.vec2, angle = 0, scale = 1/200)
-      of Gem:
-        bxy.drawImage(mapSpriteKey("gem"), pos.vec2, angle = 0, scale = 1/200)
-      of Bush:
-        bxy.drawImage(mapSpriteKey("bush"), pos.vec2, angle = 0, scale = 1/200)
-      of Animal:
-        bxy.drawImage(mapSpriteKey("cow"), pos.vec2, angle = 0, scale = 1/200)
-      of Grass:
-        bxy.drawImage(mapSpriteKey("grass"), pos.vec2, angle = 0, scale = 1/200)
-      of Cactus:
-        bxy.drawImage(mapSpriteKey("cactus"), pos.vec2, angle = 0, scale = 1/200)
-      of Dune:
-        bxy.drawImage(mapSpriteKey("dune"), pos.vec2, angle = 0, scale = 1/200)
-      of Sand:
-        bxy.drawImage(mapSpriteKey("sand"), pos.vec2, angle = 0, scale = 1/200)
-      of Snow:
-        bxy.drawImage(mapSpriteKey("snow"), pos.vec2, angle = 0, scale = 1/200)
-      of Stalagmite:
-        bxy.drawImage(mapSpriteKey("stalagmite"), pos.vec2, angle = 0, scale = 1/200)
+        bxy.drawImage("objects/fertile", pos.vec2, angle = 0, scale = 1/200)
       of Empty:
         discard
       else:
@@ -175,7 +103,7 @@ proc drawAttackOverlays*() =
       let c = env.actionTintColor[pos.x][pos.y]
       # Render the short-lived action overlay fully opaque so it sits above the
       # normal tint layer and clearly masks the underlying tile color.
-      bxy.drawImage("map/floor", pos.vec2, angle = 0, scale = 1/200, tint = color(c.r, c.g, c.b, 1.0))
+      bxy.drawImage("objects/floor", pos.vec2, angle = 0, scale = 1/200, tint = color(c.r, c.g, c.b, 1.0))
 
 proc ensureHeartCountLabel(count: int): string =
   ## Cache a simple "x N" label for large heart counts so we can reuse textures.
@@ -218,9 +146,9 @@ proc generateWallSprites(): seq[string] =
     if (i and 1) != 0: suffix.add("e")
 
     if suffix.len > 0:
-      result[i] = "map/wall." & suffix
+      result[i] = "objects/wall." & suffix
     else:
-      result[i] = "map/wall"
+      result[i] = "objects/wall"
 
 const wallSprites = generateWallSprites()
 
@@ -269,25 +197,14 @@ proc drawWalls*() =
   for fillPos in wallFills:
     let brightness = 0.3  # Fixed wall fill brightness
     let fillTint = color(brightness, brightness, brightness, 1.0)
-    bxy.drawImage("map/wall.fill", fillPos.vec2 + vec2(0.5, 0.3),
+    bxy.drawImage("objects/wall.fill", fillPos.vec2 + vec2(0.5, 0.3),
                   angle = 0, scale = 1/200, tint = fillTint)
-
-proc drawDoors*() =
-  for x in 0 ..< MapWidth:
-    for y in 0 ..< MapHeight:
-      let pos = ivec2(x, y)
-      if not env.hasDoor(pos):
-        continue
-      let teamId = env.getDoorTeam(pos)
-      let base = if teamId >= 0 and teamId < teamColors.len: teamColors[teamId] else: color(0.8, 0.8, 0.8, 1.0)
-      let tint = color(base.r * 0.75 + 0.1, base.g * 0.75 + 0.1, base.b * 0.75 + 0.1, 0.9)
-      bxy.drawImage(doorSpriteKey, pos.vec2, angle = 0, scale = 1/200, tint = tint)
 
 proc drawObjects*() =
   drawAttackOverlays()
 
   let drawWaterTile = proc(pos: Vec2) =
-    bxy.drawImage("map/water", pos, angle = 0, scale = 1/200)
+    bxy.drawImage("objects/water", pos, angle = 0, scale = 1/200)
 
   # Draw water from terrain so agents can occupy those tiles while keeping visuals.
   for x in 0 ..< MapWidth:
@@ -306,14 +223,6 @@ proc drawObjects*() =
         case thing.kind
         of Wall:
           discard
-        of TreeObject:
-          let treeSprite = if thing.treeVariant == TreeVariantPalm:
-            mapSpriteKey("palm")
-          else:
-            mapSpriteKey("pine")
-          bxy.drawImage(treeSprite, pos.vec2, angle = 0, scale = 1/200)
-          if infected:
-            drawOverlayIf(true, getInfectionSprite("tree"), pos.vec2)
         of Agent:
           let agent = thing
           var agentImage = case agent.orientation:
@@ -336,11 +245,11 @@ proc drawObjects*() =
           )
 
         of assembler:
-          let baseImage = mapSpriteKey("assembler")  # Visual centerpiece for each village
+          let baseImage = "objects/altar"  # Visual centerpiece for each village
           let assemblerTint = getassemblerColor(pos)
           # Subtle ground tint so altars start with their team shade visible.
           bxy.drawImage(
-            "map/floor",
+            "objects/floor",
             pos.vec2,
             angle = 0,
             scale = 1/200,
@@ -379,15 +288,12 @@ proc drawObjects*() =
             drawOverlayIf(true, getInfectionSprite("assembler"), pos.vec2)
 
         of Converter:
-          let baseImage = mapSpriteKey("converter")
+          let baseImage = "objects/converter"
           bxy.drawImage(baseImage, pos.vec2, angle = 0, scale = 1/200)
           drawOverlayIf(infected, getInfectionSprite("converter"), pos.vec2)
 
         of Mine, Spawner:
-          let imageName = if thing.kind == Mine:
-            mapSpriteKey("mine")
-          else:
-            mapSpriteKey("spawner")
+          let imageName = if thing.kind == Mine: "objects/mine" else: "objects/spawner"
           bxy.drawImage(imageName, pos.vec2, angle = 0, scale = 1/200)
           if infected and thing.kind == Mine:
             drawOverlayIf(true, getInfectionSprite("mine"), pos.vec2)
@@ -407,16 +313,12 @@ proc drawObjects*() =
           # Tumors draw directly with tint variations baked into the sprite
           bxy.drawImage(baseImage, pos.vec2, angle = 0, scale = 1/200)
 
-        of Cow:
-          let cowSprite = if thing.orientation == Orientation.E: mapSpriteKey("cow_r") else: mapSpriteKey("cow")
-          bxy.drawImage(cowSprite, pos.vec2, angle = 0, scale = 1/200)
-
         of Armory, Forge, ClayOven, WeavingLoom:
           let imageName = case thing.kind:
-            of Armory: mapSpriteKey("armory")
-            of Forge: mapSpriteKey("forge")
-            of ClayOven: mapSpriteKey("clay_oven")
-            of WeavingLoom: mapSpriteKey("weaving_loom")
+            of Armory: "objects/armory"
+            of Forge: "objects/forge"
+            of ClayOven: "objects/clay_oven"
+            of WeavingLoom: "objects/weaving_loom"
             else: ""
 
           bxy.drawImage(imageName, pos.vec2, angle = 0, scale = 1/200)
@@ -429,38 +331,15 @@ proc drawObjects*() =
               else: "building"
             drawOverlayIf(true, getInfectionSprite(overlayType), pos.vec2)
 
-        of Barrel:
-          let imageName = mapSpriteKey("barrel")
-          bxy.drawImage(imageName, pos.vec2, angle = 0, scale = 1/200)
-          if infected:
-            drawOverlayIf(true, getInfectionSprite("building"), pos.vec2)
-
-        of Bed, Chair, Table, Statue:
-          let imageName = case thing.kind:
-            of Bed: mapSpriteKey("bed")
-            of Chair: mapSpriteKey("chair")
-            of Table: mapSpriteKey("table")
-            of Statue: mapSpriteKey("statue")
-            else: mapSpriteKey("bed")
-
-          bxy.drawImage(imageName, pos.vec2, angle = 0, scale = 1/200)
-          if infected:
-            drawOverlayIf(true, getInfectionSprite("building"), pos.vec2)
-
-        of WatchTower:
-          bxy.drawImage(mapSpriteKey("watchtower"), pos.vec2, angle = 0, scale = 1/200)
-          if infected:
-            drawOverlayIf(true, getInfectionSprite("building"), pos.vec2)
-
         of PlantedLantern:
           # Draw lantern using a simple image with team color tint
           let lantern = thing
           if lantern.lanternHealthy and lantern.teamId >= 0 and lantern.teamId < teamColors.len:
             let teamColor = teamColors[lantern.teamId]
-            bxy.drawImage(mapSpriteKey("lantern"), pos.vec2, angle = 0, scale = 1/200, tint = teamColor)
+            bxy.drawImage("objects/lantern", pos.vec2, angle = 0, scale = 1/200, tint = teamColor)
           else:
             # Unhealthy or unassigned lantern - draw as gray
-            bxy.drawImage(mapSpriteKey("lantern"), pos.vec2, angle = 0, scale = 1/200, tint = color(0.5, 0.5, 0.5, 1.0))
+            bxy.drawImage("objects/lantern", pos.vec2, angle = 0, scale = 1/200, tint = color(0.5, 0.5, 0.5, 1.0))
 
 proc drawVisualRanges*(alpha = 0.2) =
   var visibility: array[MapWidth, array[MapHeight, bool]]
@@ -502,80 +381,59 @@ proc drawAgentDecorations*() =
       let segStep = 0.16
       for i in 0 ..< segments:
         let tint = if i < filled: color(0.1, 0.8, 0.1, 1.0) else: color(0.3, 0.3, 0.3, 0.7)
-        bxy.drawImage("map/floor", agent.pos.vec2 + vec2(baseOffset.x + segStep * i.float32, baseOffset.y), angle = 0, scale = 1/500, tint = tint)
+        bxy.drawImage("objects/floor", agent.pos.vec2 + vec2(baseOffset.x + segStep * i.float32, baseOffset.y), angle = 0, scale = 1/500, tint = tint)
 
-    # Inventory overlays placed radially, ordered by item name.
-    type OverlayItem = object
-      name: string
-      icon: string
-      count: int
-
-    proc iconForItem(key: ItemKey): string =
-      if key == ItemOre: return inventorySpriteKey("ore")
-      if key == ItemBar: return inventorySpriteKey("bar")
-      if key == ItemWater: return inventorySpriteKey("water")
-      if key == ItemWheat: return inventorySpriteKey("wheat")
-      if key == ItemWood: return inventorySpriteKey("wood")
-      if key == ItemSpear: return inventorySpriteKey("spear")
-      if key == ItemLantern: return inventorySpriteKey("lantern")
-      if key == ItemArmor: return inventorySpriteKey("armor")
-      if key == ItemBread: return inventorySpriteKey("bread")
-      if key == ItemMilk: return inventorySpriteKey("liquid_misc")
-      if key == ItemHearts: return "ui/heart"
-      if key.startsWith(ItemThingPrefix):
-        let kindName = key[ItemThingPrefix.len .. ^1]
-        case kindName
-        of "Armory": return mapSpriteKey("armory")
-        of "Forge": return mapSpriteKey("forge")
-        of "ClayOven": return mapSpriteKey("clay_oven")
-        of "WeavingLoom": return mapSpriteKey("weaving_loom")
-        of "Bed": return mapSpriteKey("bed")
-        of "Chair": return mapSpriteKey("chair")
-        of "Table": return mapSpriteKey("table")
-        of "Statue": return mapSpriteKey("statue")
-        of "WatchTower": return mapSpriteKey("watchtower")
-        of "Barrel": return mapSpriteKey("barrel")
-        of "Mine": return mapSpriteKey("mine")
-        of "Converter": return mapSpriteKey("converter")
-        of "assembler": return mapSpriteKey("assembler")
-        of "Spawner": return mapSpriteKey("spawner")
-        of "Wall": return mapSpriteKey("wall")
-        of "PlantedLantern": return mapSpriteKey("lantern")
-        else: return mapSpriteKey("floor")
-      return inventorySpriteKey(key)
-
+    # Inventory overlays placed per-corner/edge for clarity
+    type OverlayItem = tuple[key: string, icon: string, count: int]
     var overlays: seq[OverlayItem] = @[]
-    for key, count in agent.inventory.pairs:
-      if count <= 0:
-        continue
-      overlays.add(OverlayItem(name: key, icon: iconForItem(key), count: count))
+    if agent.inventoryOre > 0: overlays.add((key: "s", icon: "resources/ore", count: agent.inventoryOre))
+    if agent.inventoryBattery > 0: overlays.add((key: "c", icon: "resources/battery", count: agent.inventoryBattery))
+    if agent.inventoryWater > 0: overlays.add((key: "n", icon: "resources/water", count: agent.inventoryWater))
+    if agent.inventoryWheat > 0: overlays.add((key: "sw", icon: "resources/wheat", count: agent.inventoryWheat))
+    if agent.inventoryBread > 0: overlays.add((key: "w", icon: "resources/bread", count: agent.inventoryBread))
+    if agent.inventoryArmor > 0: overlays.add((key: "nw", icon: "resources/armor", count: agent.inventoryArmor))
+    if agent.inventoryLantern > 0: overlays.add((key: "e", icon: "objects/lantern", count: agent.inventoryLantern))
+    if agent.inventoryWood > 0: overlays.add((key: "se", icon: "resources/wood", count: agent.inventoryWood))
+    if agent.inventorySpear > 0: overlays.add((key: "ne", icon: "resources/spear", count: agent.inventorySpear))
 
     if overlays.len == 0:
       continue
 
-    overlays.sort(proc(a, b: OverlayItem): int = cmp(a.name, b.name))
-
     let basePos = agent.pos.vec2
     let iconScale = 1/320
     let maxStack = 4
-    let stackStep = 0.10
-    let baseRadius = 0.58
-    let startAngle = 135.0  # degrees, top-left from positive X axis
-    let step = 360.0 / overlays.len.float32
+    let stackStep = 0.08
 
-    for i, ov in overlays:
-      let angle = degToRad(startAngle - step * i.float32)
-      let dir = vec2(cos(angle).float32, -sin(angle).float32)
+    # Anchor offsets per key (corners cling to tile corners; edges sit mid-height)
+    let anchor = toTable({
+      "nw": vec2(-0.56, -0.56),
+      "n":  vec2(-0.08, -0.63),
+      "ne": vec2(0.40, -0.56),
+      "w":  vec2(-0.63, -0.08),
+      "c":  vec2(0.00, 0.00),
+      "e":  vec2(0.47, -0.08),
+      "sw": vec2(-0.56, 0.40),
+      "s":  vec2(-0.08, 0.47),
+      "se": vec2(0.40, 0.40)
+    })
+
+    var stackCounts = initTable[string, int]()
+
+    for ov in overlays:
+      let off = anchor.getOrDefault(ov.key, vec2(0.0, -0.42))
+      var stackIdx = stackCounts.getOrDefault(ov.key, 0)
       let n = min(ov.count, maxStack)
-      for j in 0 ..< n:
-        let pos = basePos + dir * (baseRadius + stackStep * j.float32)
+      for i in 0 ..< n:
+        let pos = basePos + off + vec2(0.0, -stackIdx.float32 * stackStep)
         bxy.drawImage(ov.icon, pos, angle = 0, scale = iconScale)
+        stackIdx += 1
+      stackCounts[ov.key] = stackIdx
 
 proc drawGrid*() =
   for x in 0 ..< MapWidth:
     for y in 0 ..< MapHeight:
       bxy.drawImage(
-        "ui/grid",
+        "view/grid",
         ivec2(x, y).vec2,
         angle = 0,
         scale = 1/200
@@ -584,67 +442,8 @@ proc drawGrid*() =
 proc drawSelection*() =
   if selection != nil:
     bxy.drawImage(
-      "ui/selection",
+      "selection",
       selection.pos.vec2,
       angle = 0,
       scale = 1/200
     )
-
-proc drawSelectionLabel*(panelRect: IRect) =
-  if selectedPos.x < 0 or selectedPos.x >= MapWidth or
-     selectedPos.y < 0 or selectedPos.y >= MapHeight:
-    return
-
-  var label = ""
-  let thing = env.grid[selectedPos.x][selectedPos.y]
-  if thing != nil:
-    label = case thing.kind
-      of Agent: "Agent"
-      of Wall: "Wall"
-      of TreeObject: "Tree"
-      of Mine: "Mine"
-      of Converter: "Converter"
-      of assembler: "Altar"
-      of Spawner: "Spawner"
-      of Tumor: "Tumor"
-      of Cow: "Cow"
-      of Armory: "Armory"
-      of Forge: "Forge"
-      of ClayOven: "Clay Oven"
-      of WeavingLoom: "Weaving Loom"
-      of Bed: "Bed"
-      of Chair: "Chair"
-      of Table: "Table"
-      of Statue: "Statue"
-      of WatchTower: "Watch Tower"
-      of Barrel: "Barrel"
-      of PlantedLantern: "Lantern"
-  elif env.hasDoor(selectedPos):
-    label = "Door"
-  else:
-    label = case env.terrain[selectedPos.x][selectedPos.y]
-      of Water: "Water"
-      of Bridge: "Bridge"
-      of Wheat: "Wheat"
-      of Tree: "Tree"
-      of Palm: "Palm"
-      of Fertile: "Fertile"
-      of Road: "Road"
-      of Rock: "Rock"
-      of Gem: "Gem"
-      of Bush: "Bush"
-      of Animal: "Animal"
-      of Grass: "Grass"
-      of Cactus: "Cactus"
-      of Dune: "Dune"
-      of Sand: "Sand"
-      of Snow: "Snow"
-      of Stalagmite: "Stalagmite"
-      of Empty: "Empty"
-
-  let key = ensureInfoLabel(label)
-  if key.len == 0:
-    return
-  let pos = vec2(panelRect.x.float32 + 8 + InfoLabelInsetX.float32,
-    panelRect.y.float32 + 8 + InfoLabelInsetY.float32)
-  bxy.drawImage(key, pos, angle = 0, scale = 1)

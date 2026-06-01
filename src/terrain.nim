@@ -1,11 +1,5 @@
 import std/math, vmath
 import rng_compat
-import biome_forest, biome_desert, biome_caves, biome_city, biome_plains, biome_snow, biome_common
-import dungeon_maze, dungeon_radial
-
-const
-  # Keep in sync with biome_common.nim's MaxBiomeSize.
-  MaxTerrainSize* = 512
 
 type
   TerrainType* = enum
@@ -15,319 +9,19 @@ type
     Wheat
     Tree
     Fertile
-    Road
-    Rock
-    Gem
-    Bush
-    Animal
-    Grass
-    Cactus
-    Dune
-    Stalagmite
-    Palm
-    Sand
-    Snow
-  ## Sized to comfortably exceed current MapWidth/MapHeight.
-  TerrainGrid* = array[MaxTerrainSize, array[MaxTerrainSize, TerrainType]]
+
+  TerrainGrid* = array[256, array[256, TerrainType]]
 
   Structure* = object
     width*, height*: int
     centerPos*: IVec2
     layout*: seq[seq[char]]
 
-type
-  BiomeKind* = enum
-    BiomeForest
-    BiomeDesert
-    BiomeCaves
-    BiomeCity
-    BiomePlains
-    BiomeSnow
-
-  BiomeType* = enum
-    BiomeNone
-    BiomeForestType
-    BiomeDesertType
-    BiomeCavesType
-    BiomeCityType
-    BiomePlainsType
-    BiomeSnowType
-    BiomeDungeonType
-
-  BiomeGrid* = array[MaxTerrainSize, array[MaxTerrainSize, BiomeType]]
-
-  DungeonKind* = enum
-    DungeonMaze
-    DungeonRadial
-
-const
-  UseBiomeTerrain* = true
-  BaseBiome* = BiomePlains
-  BiomeForestTerrain* = Tree
-  BiomeDesertTerrain* = Sand
-  BiomeCavesTerrain* = Stalagmite
-  BiomePlainsTerrain* = Grass
-  BiomeSnowTerrain* = Snow
-  BiomeCityBlockTerrain* = Rock
-  BiomeCityRoadTerrain* = Road
-  UseBiomeZones* = true
-  UseDungeonZones* = true
-  UseSequentialBiomeZones* = true
-  UseLegacyTreeClusters* = true
-  UsePalmGroves* = true
-  WheatFieldClusterBase* = 14
-  WheatFieldClusterRange* = 6
-  WheatFieldClusterScale* = 7
-  TreeGroveClusterBase* = 14
-  TreeGroveClusterRange* = 6
-  TreeGroveClusterScale* = 7
-  PalmGroveClusterBase* = 6
-  PalmGroveClusterRange* = 4
-  PalmGroveClusterScale* = 3
-  # Slightly higher biome/dungeon density for richer maps.
-  BiomeZoneDivisor* = 5500
-  DungeonZoneDivisor* = 9000
-  BiomeZoneMinCount* = 5
-  BiomeZoneMaxCount* = 12
-  DungeonZoneMinCount* = 4
-  DungeonZoneMaxCount* = 9
-  BiomeZoneMaxFraction* = 0.44
-  DungeonZoneMaxFraction* = 0.36
-  ZoneMinSize* = 18
-  DungeonTerrainWall* = Tree
-  DungeonTerrainPath* = Road
-
-const
-  TerrainEmpty* = TerrainType.Empty
-  TerrainWater* = TerrainType.Water
-  TerrainBridge* = TerrainType.Bridge
-  TerrainWheat* = TerrainType.Wheat
-  TerrainTree* = TerrainType.Tree
-  TerrainPalm* = TerrainType.Palm
-  TerrainFertile* = TerrainType.Fertile
-  TerrainRock* = TerrainType.Rock
-  TerrainGem* = TerrainType.Gem
-  TerrainBush* = TerrainType.Bush
-  TerrainAnimal* = TerrainType.Animal
-  TerrainGrass* = TerrainType.Grass
-  TerrainCactus* = TerrainType.Cactus
-  TerrainDune* = TerrainType.Dune
-  TerrainStalagmite* = TerrainType.Stalagmite
-  TerrainSand* = TerrainType.Sand
-  TerrainSnow* = TerrainType.Snow
-
-template isBlockedTerrain*(terrain: TerrainType): bool =
-  terrain in {Water, Dune, Stalagmite, Snow}
-
 template randInclusive(r: var Rand, a, b: int): int = randIntInclusive(r, a, b)
 template randChance(r: var Rand, p: float): bool = randFloat(r) < p
 
 const
   RiverWidth* = 6
-
-type
-  ZoneRect* = object
-    x*, y*, w*, h*: int
-
-proc applyMaskToTerrain(terrain: var TerrainGrid, mask: MaskGrid, mapWidth, mapHeight, mapBorder: int,
-                        terrainType: TerrainType) =
-  for x in mapBorder ..< mapWidth - mapBorder:
-    for y in mapBorder ..< mapHeight - mapBorder:
-      if mask[x][y] and terrain[x][y] == Empty:
-        terrain[x][y] = terrainType
-
-proc applyMaskToTerrainRect(terrain: var TerrainGrid, mask: MaskGrid, zone: ZoneRect,
-                            mapWidth, mapHeight, mapBorder: int, terrainType: TerrainType,
-                            overwrite = false) =
-  let x0 = max(mapBorder, zone.x)
-  let y0 = max(mapBorder, zone.y)
-  let x1 = min(mapWidth - mapBorder, zone.x + zone.w)
-  let y1 = min(mapHeight - mapBorder, zone.y + zone.h)
-  if x1 <= x0 or y1 <= y0:
-    return
-  for x in x0 ..< x1:
-    for y in y0 ..< y1:
-      if mask[x][y]:
-        if overwrite or terrain[x][y] == Empty:
-          terrain[x][y] = terrainType
-
-proc applyBiomeToZone(biomes: var BiomeGrid, zone: ZoneRect, mapWidth, mapHeight, mapBorder: int,
-                      biome: BiomeType) =
-  let x0 = max(mapBorder, zone.x)
-  let y0 = max(mapBorder, zone.y)
-  let x1 = min(mapWidth - mapBorder, zone.x + zone.w)
-  let y1 = min(mapHeight - mapBorder, zone.y + zone.h)
-  if x1 <= x0 or y1 <= y0:
-    return
-  for x in x0 ..< x1:
-    for y in y0 ..< y1:
-      biomes[x][y] = biome
-
-proc applyBiomeMaskToZone(terrain: var TerrainGrid, biomes: var BiomeGrid, mask: MaskGrid,
-                          zone: ZoneRect, mapWidth, mapHeight, mapBorder: int,
-                          terrainType: TerrainType, biomeType: BiomeType, baseBiomeType: BiomeType,
-                          r: var Rand, blendChance: float) =
-  let x0 = max(mapBorder, zone.x)
-  let y0 = max(mapBorder, zone.y)
-  let x1 = min(mapWidth - mapBorder, zone.x + zone.w)
-  let y1 = min(mapHeight - mapBorder, zone.y + zone.h)
-  if x1 <= x0 or y1 <= y0:
-    return
-  for x in x0 ..< x1:
-    for y in y0 ..< y1:
-      if not mask[x][y]:
-        continue
-      if terrain[x][y] == Empty or terrainType == Dune or randChance(r, blendChance):
-        terrain[x][y] = terrainType
-      if biomes[x][y] == baseBiomeType or randChance(r, blendChance):
-        biomes[x][y] = biomeType
-
-proc fillTerrainInZone(terrain: var TerrainGrid, zone: ZoneRect, mapWidth, mapHeight, mapBorder: int,
-                       terrainType: TerrainType, overwriteWater = false) =
-  let x0 = max(mapBorder, zone.x)
-  let y0 = max(mapBorder, zone.y)
-  let x1 = min(mapWidth - mapBorder, zone.x + zone.w)
-  let y1 = min(mapHeight - mapBorder, zone.y + zone.h)
-  if x1 <= x0 or y1 <= y0:
-    return
-  for x in x0 ..< x1:
-    for y in y0 ..< y1:
-      if not overwriteWater and terrain[x][y] == Water:
-        continue
-      terrain[x][y] = terrainType
-
-proc pickWeighted[T](r: var Rand, options: openArray[T], weights: openArray[float]): T =
-  var total = 0.0
-  for w in weights:
-    total += max(0.0, w)
-  if total <= 0.0:
-    return options[0]
-  let roll = randFloat(r) * total
-  var accum = 0.0
-  for i, w in weights:
-    accum += max(0.0, w)
-    if roll <= accum:
-      return options[i]
-  options[^1]
-
-proc randomZone*(r: var Rand, mapWidth, mapHeight, mapBorder: int, maxFraction: float): ZoneRect =
-  let maxW = max(ZoneMinSize, int(min(mapWidth.float * maxFraction, mapWidth.float / 2)))
-  let maxH = max(ZoneMinSize, int(min(mapHeight.float * maxFraction, mapHeight.float / 2)))
-  let w = randIntInclusive(r, ZoneMinSize, maxW)
-  let h = randIntInclusive(r, ZoneMinSize, maxH)
-  let xMax = max(mapBorder, mapWidth - mapBorder - w)
-  let yMax = max(mapBorder, mapHeight - mapBorder - h)
-  let x = randIntInclusive(r, mapBorder, xMax)
-  let y = randIntInclusive(r, mapBorder, yMax)
-  ZoneRect(x: x, y: y, w: w, h: h)
-
-proc zoneCount*(area: int, divisor: int, minCount: int, maxCount: int): int =
-  let raw = max(1, area div divisor)
-  clamp(raw, minCount, maxCount)
-
-proc pickDungeonKind*(r: var Rand): DungeonKind =
-  let kinds = [DungeonMaze, DungeonRadial]
-  let weights = [1.0, 0.6]
-  pickWeighted(r, kinds, weights)
-
-proc buildDungeonMask*(mask: var MaskGrid, mapWidth, mapHeight: int, zone: ZoneRect,
-                       r: var Rand, kind: DungeonKind) =
-  case kind:
-  of DungeonMaze:
-    buildDungeonMazeMask(mask, mapWidth, mapHeight, zone.x, zone.y, zone.w, zone.h, r, DungeonMazeConfig())
-  of DungeonRadial:
-    buildDungeonRadialMask(mask, mapWidth, mapHeight, zone.x, zone.y, zone.w, zone.h, r, DungeonRadialConfig())
-
-proc applyBiomeZones(terrain: var TerrainGrid, biomes: var BiomeGrid, mapWidth, mapHeight, mapBorder: int,
-                     r: var Rand) =
-  let count = zoneCount(mapWidth * mapHeight, BiomeZoneDivisor, BiomeZoneMinCount, BiomeZoneMaxCount)
-  let kinds = [BiomeForest, BiomeDesert, BiomeCaves, BiomeCity, BiomePlains, BiomeSnow]
-  let weights = [1.0, 1.0, 0.6, 0.6, 1.0, 0.8]
-  let baseBiomeType = case BaseBiome:
-    of BiomeForest: BiomeForestType
-    of BiomeDesert: BiomeDesertType
-    of BiomeCaves: BiomeCavesType
-    of BiomeCity: BiomeCityType
-    of BiomePlains: BiomePlainsType
-    of BiomeSnow: BiomeSnowType
-  var seqIdx = randIntInclusive(r, 0, kinds.len - 1)
-  let blendChance = 0.35
-  for _ in 0 ..< count:
-    let zone = randomZone(r, mapWidth, mapHeight, mapBorder, BiomeZoneMaxFraction)
-    let biome = if UseSequentialBiomeZones:
-      let selected = kinds[seqIdx mod kinds.len]
-      inc seqIdx
-      selected
-    else:
-      pickWeighted(r, kinds, weights)
-    var mask: MaskGrid
-    case biome:
-    of BiomeForest:
-      buildBiomeForestMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeForestConfig())
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        BiomeForestTerrain, BiomeForestType, baseBiomeType, r, blendChance)
-    of BiomeDesert:
-      # Fill the desert zone with sand, then layer dunes as impassable obstacles.
-      fillTerrainInZone(terrain, zone, mapWidth, mapHeight, mapBorder, TerrainSand)
-      buildBiomeDesertMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeDesertConfig())
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        TerrainDune, BiomeDesertType, baseBiomeType, r, blendChance)
-    of BiomeCaves:
-      buildBiomeCavesMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeCavesConfig())
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        BiomeCavesTerrain, BiomeCavesType, baseBiomeType, r, blendChance)
-    of BiomeSnow:
-      # Fill with snow, then add clustered accents for texture.
-      fillTerrainInZone(terrain, zone, mapWidth, mapHeight, mapBorder, TerrainSnow)
-      buildBiomeSnowMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeSnowConfig())
-      let snowBlend = max(blendChance, 0.75)
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        BiomeSnowTerrain, BiomeSnowType, baseBiomeType, r, snowBlend)
-    of BiomeCity:
-      var roadMask: MaskGrid
-      buildBiomeCityMasks(mask, roadMask, mapWidth, mapHeight, mapBorder, r, BiomeCityConfig())
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        BiomeCityBlockTerrain, BiomeCityType, baseBiomeType, r, blendChance)
-      applyBiomeMaskToZone(terrain, biomes, roadMask, zone, mapWidth, mapHeight, mapBorder,
-        BiomeCityRoadTerrain, BiomeCityType, baseBiomeType, r, blendChance)
-    of BiomePlains:
-      buildBiomePlainsMask(mask, mapWidth, mapHeight, mapBorder, r, BiomePlainsConfig())
-      applyBiomeMaskToZone(terrain, biomes, mask, zone, mapWidth, mapHeight, mapBorder,
-        BiomePlainsTerrain, BiomePlainsType, baseBiomeType, r, blendChance)
-
-proc applyDungeonZones(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  let count = zoneCount(mapWidth * mapHeight, DungeonZoneDivisor, DungeonZoneMinCount, DungeonZoneMaxCount)
-  for _ in 0 ..< count:
-    let zone = randomZone(r, mapWidth, mapHeight, mapBorder, DungeonZoneMaxFraction)
-    var mask: MaskGrid
-    let dungeon = pickDungeonKind(r)
-    buildDungeonMask(mask, mapWidth, mapHeight, zone, r, dungeon)
-    applyMaskToTerrainRect(terrain, mask, zone, mapWidth, mapHeight, mapBorder,
-      DungeonTerrainWall, overwrite = true)
-
-proc applyBaseBiome(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  var mask: MaskGrid
-  case BaseBiome:
-  of BiomeForest:
-    buildBiomeForestMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeForestConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomeForestTerrain)
-  of BiomeDesert:
-    buildBiomeDesertMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeDesertConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomeDesertTerrain)
-  of BiomeCaves:
-    buildBiomeCavesMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeCavesConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomeCavesTerrain)
-  of BiomeCity:
-    var roadMask: MaskGrid
-    buildBiomeCityMasks(mask, roadMask, mapWidth, mapHeight, mapBorder, r, BiomeCityConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomeCityBlockTerrain)
-    applyMaskToTerrain(terrain, roadMask, mapWidth, mapHeight, mapBorder, BiomeCityRoadTerrain)
-  of BiomePlains:
-    buildBiomePlainsMask(mask, mapWidth, mapHeight, mapBorder, r, BiomePlainsConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomePlainsTerrain)
-  of BiomeSnow:
-    buildBiomeSnowMask(mask, mapWidth, mapHeight, mapBorder, r, BiomeSnowConfig())
-    applyMaskToTerrain(terrain, mask, mapWidth, mapHeight, mapBorder, BiomeSnowTerrain)
 
 proc inCornerReserve(x, y, mapWidth, mapHeight, mapBorder: int, reserve: int): bool =
   ## Returns true if the coordinate is within a reserved corner area
@@ -534,9 +228,8 @@ proc createTerrainCluster*(terrain: var TerrainGrid, centerX, centerY: int, size
               terrain[x][y] = terrainType
 
 proc generateWheatFields*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  ## Generate clustered wheat fields; boosted count for richer biomes
-  let numFields = randInclusive(r, WheatFieldClusterBase, WheatFieldClusterBase + WheatFieldClusterRange) *
-    WheatFieldClusterScale
+  ## Generate clustered wheat fields; 4x previous count for larger maps
+  let numFields = randInclusive(r, 14, 20) * 4
 
   for i in 0 ..< numFields:
     var placed = false
@@ -557,23 +250,20 @@ proc generateWheatFields*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBord
           break
 
       if nearWater or attempt > 10:
-        let fieldSize = randInclusive(r, 5, 12)
+        let fieldSize = randInclusive(r, 3, 10)
         terrain.createTerrainCluster(x, y, fieldSize, mapWidth, mapHeight, Wheat, 1.0, 0.3, r)
-        terrain.createTerrainCluster(x, y, fieldSize + 1, mapWidth, mapHeight, Wheat, 0.5, 0.3, r)
         placed = true
         break
 
     if not placed:
       let x = randInclusive(r, mapBorder + 3, mapWidth - mapBorder - 3)
       let y = randInclusive(r, mapBorder + 3, mapHeight - mapBorder - 3)
-      let fieldSize = randInclusive(r, 5, 12)
+      let fieldSize = randInclusive(r, 3, 10)
       terrain.createTerrainCluster(x, y, fieldSize, mapWidth, mapHeight, Wheat, 1.0, 0.3, r)
-      terrain.createTerrainCluster(x, y, fieldSize + 1, mapWidth, mapHeight, Wheat, 0.5, 0.3, r)
 
 proc generateTrees*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  ## Generate tree groves; boosted count for richer biomes
-  let numGroves = randInclusive(r, TreeGroveClusterBase, TreeGroveClusterBase + TreeGroveClusterRange) *
-    TreeGroveClusterScale
+  ## Generate tree groves; 4x previous count for larger maps
+  let numGroves = randInclusive(r, 14, 20) * 4
 
   for i in 0 ..< numGroves:
     let x = randInclusive(r, mapBorder + 3, mapWidth - mapBorder - 3)
@@ -581,192 +271,48 @@ proc generateTrees*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: in
     let groveSize = randInclusive(r, 3, 10)
     terrain.createTerrainCluster(x, y, groveSize, mapWidth, mapHeight, Tree, 0.8, 0.4, r)
 
-proc generatePalmGroves*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  let numGroves = randInclusive(r, PalmGroveClusterBase, PalmGroveClusterBase + PalmGroveClusterRange) *
-    PalmGroveClusterScale
-  for i in 0 ..< numGroves:
-    var placed = false
-    for attempt in 0 ..< 16:
-      let x = randInclusive(r, mapBorder + 3, mapWidth - mapBorder - 3)
-      let y = randInclusive(r, mapBorder + 3, mapHeight - mapBorder - 3)
-      var nearWater = false
-      for dx in -5 .. 5:
-        for dy in -5 .. 5:
-          let checkX = x + dx
-          let checkY = y + dy
-          if checkX >= 0 and checkX < mapWidth and checkY >= 0 and checkY < mapHeight:
-            if terrain[checkX][checkY] == Water:
-              nearWater = true
-              break
-        if nearWater:
-          break
-      if nearWater or attempt > 10:
-        let groveSize = randInclusive(r, 3, 8)
-        terrain.createTerrainCluster(x, y, groveSize, mapWidth, mapHeight, Palm, 0.85, 0.4, r)
-        let oasisW = randInclusive(r, 3, 5)
-        let oasisH = randInclusive(r, 3, 5)
-        let x0 = x - (oasisW div 2)
-        let y0 = y - (oasisH div 2)
-        for ox in 0 ..< oasisW:
-          for oy in 0 ..< oasisH:
-            let px = x0 + ox
-            let py = y0 + oy
-            if px < mapBorder or px >= mapWidth - mapBorder or py < mapBorder or py >= mapHeight - mapBorder:
-              continue
-            terrain[px][py] = Water
-        placed = true
-        break
-    if not placed:
-      let x = randInclusive(r, mapBorder + 3, mapWidth - mapBorder - 3)
-      let y = randInclusive(r, mapBorder + 3, mapHeight - mapBorder - 3)
-      let groveSize = randInclusive(r, 3, 8)
-      terrain.createTerrainCluster(x, y, groveSize, mapWidth, mapHeight, Palm, 0.85, 0.4, r)
-      let oasisW = randInclusive(r, 3, 5)
-      let oasisH = randInclusive(r, 3, 5)
-      let x0 = x - (oasisW div 2)
-      let y0 = y - (oasisH div 2)
-      for ox in 0 ..< oasisW:
-        for oy in 0 ..< oasisH:
-          let px = x0 + ox
-          let py = y0 + oy
-          if px < mapBorder or px >= mapWidth - mapBorder or py < mapBorder or py >= mapHeight - mapBorder:
-            continue
-          terrain[px][py] = Water
-
-proc generateRockOutcrops*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  let clusters = max(16, mapWidth div 25)
-  for i in 0 ..< clusters:
-    let x = randInclusive(r, mapBorder + 4, mapWidth - mapBorder - 4)
-    let y = randInclusive(r, mapBorder + 4, mapHeight - mapBorder - 4)
-    let size = randInclusive(r, 3, 7)
-    terrain.createTerrainCluster(x, y, size, mapWidth, mapHeight, Rock, 0.85, 0.35, r)
-
-proc generateGemVeins*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  let clusters = max(8, mapWidth div 50)
-  for i in 0 ..< clusters:
-    let x = randInclusive(r, mapBorder + 6, mapWidth - mapBorder - 6)
-    let y = randInclusive(r, mapBorder + 6, mapHeight - mapBorder - 6)
-    let size = randInclusive(r, 2, 4)
-    terrain.createTerrainCluster(x, y, size, mapWidth, mapHeight, Gem, 0.7, 0.5, r)
-
-proc generateBushes*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  for i in 0 ..< 30:
-    var attempts = 0
-    var placed = false
-    while attempts < 12 and not placed:
-      inc attempts
-      let x = randInclusive(r, mapBorder + 2, mapWidth - mapBorder - 2)
-      let y = randInclusive(r, mapBorder + 2, mapHeight - mapBorder - 2)
-      var nearWater = false
-      for dx in -4 .. 4:
-        for dy in -4 .. 4:
-          let checkX = x + dx
-          let checkY = y + dy
-          if checkX >= 0 and checkX < mapWidth and checkY >= 0 and checkY < mapHeight:
-            if terrain[checkX][checkY] == Water:
-              nearWater = true
-              break
-        if nearWater:
-          break
-      if nearWater or attempts >= 10:
-        let size = randInclusive(r, 3, 7)
-        terrain.createTerrainCluster(x, y, size, mapWidth, mapHeight, Bush, 0.75, 0.45, r)
-        placed = true
-
-proc generateAnimals*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, r: var Rand) =
-  for i in 0 ..< 24:
-    let x = randInclusive(r, mapBorder + 3, mapWidth - mapBorder - 3)
-    let y = randInclusive(r, mapBorder + 3, mapHeight - mapBorder - 3)
-    let size = randInclusive(r, 2, 4)
-    terrain.createTerrainCluster(x, y, size, mapWidth, mapHeight, Animal, 0.6, 0.6, r)
-
-proc initTerrain*(terrain: var TerrainGrid, biomes: var BiomeGrid,
-                  mapWidth, mapHeight, mapBorder: int, seed: int = 2024) =
+proc initTerrain*(terrain: var TerrainGrid, mapWidth, mapHeight, mapBorder: int, seed: int = 2024) =
   ## Initialize terrain with all features
   var r = initRand(seed)
-
-  if mapWidth > terrain.len or mapHeight > terrain[0].len:
-    raise newException(ValueError, "Map size exceeds TerrainGrid bounds")
 
   for x in 0 ..< mapWidth:
     for y in 0 ..< mapHeight:
       terrain[x][y] = Empty
-      biomes[x][y] = BiomeNone
-
-  # Set base biome background across the playable area.
-  let baseBiomeType = case BaseBiome:
-    of BiomeForest: BiomeForestType
-    of BiomeDesert: BiomeDesertType
-    of BiomeCaves: BiomeCavesType
-    of BiomeCity: BiomeCityType
-    of BiomePlains: BiomePlainsType
-    of BiomeSnow: BiomeSnowType
-  for x in mapBorder ..< mapWidth - mapBorder:
-    for y in mapBorder ..< mapHeight - mapBorder:
-      biomes[x][y] = baseBiomeType
-
-  if UseBiomeTerrain:
-    applyBaseBiome(terrain, mapWidth, mapHeight, mapBorder, r)
-  if UseBiomeZones:
-    applyBiomeZones(terrain, biomes, mapWidth, mapHeight, mapBorder, r)
 
   terrain.generateRiver(mapWidth, mapHeight, mapBorder, r)
   terrain.generateWheatFields(mapWidth, mapHeight, mapBorder, r)
-  if UsePalmGroves:
-    terrain.generatePalmGroves(mapWidth, mapHeight, mapBorder, r)
-  if UseLegacyTreeClusters:
-    terrain.generateTrees(mapWidth, mapHeight, mapBorder, r)
-  terrain.generateRockOutcrops(mapWidth, mapHeight, mapBorder, r)
-  terrain.generateGemVeins(mapWidth, mapHeight, mapBorder, r)
-  terrain.generateBushes(mapWidth, mapHeight, mapBorder, r)
-  terrain.generateAnimals(mapWidth, mapHeight, mapBorder, r)
+  terrain.generateTrees(mapWidth, mapHeight, mapBorder, r)
 
 proc getStructureElements*(structure: Structure, topLeft: IVec2): tuple[
     walls: seq[IVec2],
-    doors: seq[IVec2],
     floors: seq[IVec2],
     assemblers: seq[IVec2],
     forges: seq[IVec2],
     armories: seq[IVec2],
     clayOvens: seq[IVec2],
     weavingLooms: seq[IVec2],
-    beds: seq[IVec2],
-    chairs: seq[IVec2],
-    tables: seq[IVec2],
-    statues: seq[IVec2],
     center: IVec2
   ] =
   ## Extract tiles for placing a structure
-  result = (
-    walls: @[],
-    doors: @[],
-    floors: @[],
-    assemblers: @[],
-    forges: @[],
-    armories: @[],
-    clayOvens: @[],
-    weavingLooms: @[],
-    beds: @[],
-    chairs: @[],
-    tables: @[],
-    statues: @[],
-    center: topLeft + structure.centerPos
-  )
+  result.walls = @[]
+  result.floors = @[]
+  result.assemblers = @[]
+  result.forges = @[]
+  result.armories = @[]
+  result.clayOvens = @[]
+  result.weavingLooms = @[]
+
+  result.center = topLeft + structure.centerPos
 
   for y, row in structure.layout:
     for x, cell in row:
       let pos = ivec2(topLeft.x + x.int32, topLeft.y + y.int32)
       case cell
       of '#': result.walls.add(pos)
-      of 'D': result.doors.add(pos)
       of '.': result.floors.add(pos)
       of 'a': result.assemblers.add(pos)
       of 'F': result.forges.add(pos)
       of 'A': result.armories.add(pos)
       of 'C': result.clayOvens.add(pos)
       of 'W': result.weavingLooms.add(pos)
-      of 'B': result.beds.add(pos)
-      of 'H': result.chairs.add(pos)
-      of 'T': result.tables.add(pos)
-      of 'S': result.statues.add(pos)
       else: discard

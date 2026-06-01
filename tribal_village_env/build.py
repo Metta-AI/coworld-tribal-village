@@ -75,6 +75,7 @@ def _build_library(project_root: Path) -> Path:
 
 def ensure_nim_library_current(verbose: bool = True) -> Path:
     """Rebuild libtribal_village if missing or stale."""
+
     package_dir = Path(__file__).resolve().parent
     project_root = package_dir.parent
     target_name = _target_library_name()

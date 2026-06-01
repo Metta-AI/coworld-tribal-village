@@ -1,6 +1,6 @@
 import std/[os, strutils, math],
   boxy, windy, vmath,
-  src/environment, src/common, src/renderer, src/external_actions, src/df_tileset, src/assets
+  src/environment, src/common, src/renderer, src/external_actions
 
 when not defined(emscripten):
   import opengl
@@ -53,7 +53,7 @@ proc fitMapToPanel(panelRect: IRect) =
   if logicalW <= 0 or logicalH <= 0:
     return
 
-  let padding = 1.0'f32  # Zoom in one more notch
+  let padding = 0.92'f32  # Leave a small gutter so tiles do not touch the edge
   let zoomForW = sqrt(logicalW / MapWidth.float32) * padding
   let zoomForH = sqrt(logicalH / MapHeight.float32) * padding
   let targetZoom = min(zoomForW, zoomForH).clamp(worldMapPanel.minZoom, worldMapPanel.maxZoom)
@@ -166,8 +166,8 @@ proc display() =
       let oldMat = translate(worldMapPanel.pos) * scale(vec2(worldMapPanel.zoom*worldMapPanel.zoom, worldMapPanel.zoom*worldMapPanel.zoom))
       let oldWorldPoint = oldMat.inverse() * localMouse
 
-      # Scroll direction: wheel down (negative delta) zooms IN; wheel up zooms OUT.
-      let zoomFactor64 = pow(1.0 - zoomSensitivity, window.scrollDelta.y.float64)
+      # Scroll direction: wheel down (negative delta) should zoom OUT, so negate the delta in exponent.
+      let zoomFactor64 = pow(1.0 - zoomSensitivity, -window.scrollDelta.y.float64)
       let zoomFactor = zoomFactor64.float32
       worldMapPanel.zoom = clamp(worldMapPanel.zoom * zoomFactor, worldMapPanel.minZoom, worldMapPanel.maxZoom)
 
@@ -250,7 +250,6 @@ proc display() =
   drawFloor()
   drawTerrain()
   drawWalls()
-  drawDoors()
   drawObjects()
   drawAgentDecorations()
   if settings.showVisualRange:
@@ -264,7 +263,6 @@ proc display() =
   bxy.restoreTransform()
 
   bxy.restoreTransform()
-  drawSelectionLabel(panelRectInt)
   bxy.pushLayer()
   bxy.drawRect(rect = panelRect, color = color(1, 0, 0, 1.0))
   bxy.popLayer(blendMode = MaskBlend)
@@ -275,9 +273,6 @@ proc display() =
   inc frame
 
 
-# Build any missing DF tileset sprites before loading assets.
-generateDfViewAssets()
-
 # Build the atlas with progress feedback and error handling.
 echo "🎨 Loading tribal assets..."
 var loadedCount = 0
@@ -285,26 +280,18 @@ var totalFiles = 0
 
 # Count total PNG files first
 for path in walkDirRec("data/"):
-  if path.startsWith("data/df_view/"):
-    continue
   if path.endsWith(".png"):
     inc totalFiles
 
 
 for path in walkDirRec("data/"):
-  if path.startsWith("data/df_view/"):
-    continue
   if path.endsWith(".png"):
     inc loadedCount
 
     try:
-      let key = path.replace("data/", "").replace(".png", "")
-      bxy.addImage(key, readImage(path))
-      rememberAssetKey(key)
+      bxy.addImage(path.replace("data/", "").replace(".png", ""), readImage(path))
     except Exception as e:
       echo "⚠️  Skipping ", path, ": ", e.msg
-
-setDoorSprite(mapSpriteKey("door"))
 
 # Check for command line arguments to determine controller type
 var useExternalController = false

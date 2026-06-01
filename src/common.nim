@@ -23,9 +23,9 @@ type
 
     pos*: Vec2
     vel*: Vec2
-    zoom*: float32 = 1.25     # preferred default zoom (start further out)
+    zoom*: float32 = 2.0      # preferred default zoom
     zoomVel*: float32
-    minZoom*: float32 = 1.0   # allow further zoom-out
+    minZoom*: float32 = 2.0   # enforce same min as default
     maxZoom*: float32 = 8.0   # reduce maximum zoom-out
     hasMouse*: bool = false
     visible*: bool = true
@@ -65,12 +65,12 @@ var
 
   settings* = Settings()
 
-  play*: bool = true
-  playSpeed*: float32 = 0.03125  # even faster default playback
+  play*: bool
+  playSpeed*: float32 = 0.25    # quadruple baseline speed
   lastSimTime*: float64 = nowSeconds()
 
 const
-  DefaultPlaySpeed* = 0.03125
+  DefaultPlaySpeed* = 0.0625
 
 var
   followSelection*: bool = false
@@ -88,15 +88,24 @@ proc logicalMouseDelta*(window: Window): Vec2 =
 
 proc irect*(x, y, w, h: int): IRect =
   ## Utility function to create IRect from coordinates
-  IRect(x: x, y: y, w: w, h: h)
+  result.x = x
+  result.y = y
+  result.w = w
+  result.h = h
 
 proc irect*(rect: Rect): IRect =
   ## Convert floating point Rect to integer IRect
-  IRect(x: rect.x.int, y: rect.y.int, w: rect.w.int, h: rect.h.int)
+  result.x = rect.x.int
+  result.y = rect.y.int
+  result.w = rect.w.int
+  result.h = rect.h.int
 
 proc rect*(irect: IRect): Rect =
   ## Convert integer IRect to floating point Rect
-  Rect(x: irect.x.float32, y: irect.y.float32, w: irect.w.float32, h: irect.h.float32)
+  result.x = irect.x.float32
+  result.y = irect.y.float32
+  result.w = irect.w.float32
+  result.h = irect.h.float32
 
 type
   OrientationDelta* = tuple[x, y: int]
