@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+requires = ["setuptools==82.0.1", "wheel==0.47.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,11 +11,11 @@ license = { text = "MIT" }
 authors = [{ name = "Metta AI", email = "info@metta.ai" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "numpy>=1.20.0",
-  "gymnasium>=0.29.0",
-  "pufferlib-core>=3.0.0",
-  "typer>=0.19.2",
-  "rich>=13.7.0",
+  "numpy>=2.4.6",
+  "gymnasium>=1.3.0",
+  "pufferlib-core>=3.0.23",
+  "typer>=0.26.5",
+  "rich>=15.0.0",
 ]
 
 [project.scripts]
@@ -29,9 +29,8 @@ Homepage = "https://github.com/Metta-AI/coworld-tribal-village"
 Repository = "https://github.com/Metta-AI/coworld-tribal-village.git"
 
 [project.optional-dependencies]
-cogames = [
-  "cogames @ git+https://github.com/Metta-AI/metta.git#subdirectory=packages/cogames",
-]
+cogames = []
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["tribal_village_env*"]

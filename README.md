@@ -7,14 +7,14 @@ resources while hostile tumors spread a freezing “clippy” tint across the ma
 
 ## Quick Start (prioritized)
 
-**You’ll need**: Nim 2.2.6+ (via nimby), Python 3.12.x, `pip`, OpenGL libs.
+**You’ll need**: Nim 2.2.10+ (via nimby), Python 3.12.x, `pip`, OpenGL libs.
 
 1. Install Nim with nimby + sync deps
 
 ```bash
-curl -L https://github.com/treeform/nimby/releases/download/0.1.11/nimby-macOS-ARM64 -o ./nimby
+curl -L https://github.com/treeform/nimby/releases/download/0.1.27/nimby-macOS-ARM64 -o ./nimby
 chmod +x ./nimby
-./nimby use 2.2.6
+./nimby use 2.2.10
 ./nimby sync -g nimby.lock
 ```
 
@@ -33,14 +33,10 @@ tribal-village play
 # Space toggles play/pause; when paused, press Space to step once
 ```
 
-4. Train with CoGames / PufferLib
+4. Train integration status
 
-```bash
-# Requires CoGames: pip install -e .[cogames]
-tribal-village train --steps 1000000 --parallel-envs 8 --num-workers 4 --log-outputs
-# or, if using the cogames CLI:
-cogames train-tribal -p class=tribal --steps 1000000 --parallel-envs 8 --num-workers 4 --log-outputs
-```
+CoGames has been retired upstream in favor of Coworld. The legacy train command is disabled unless a compatible local
+training stack is present.
 
 ## Configuration (Python)
 
@@ -144,6 +140,8 @@ Discrete 64 (`verb * 8 + argument`), where the argument is a direction (0..7):
 
 ## Dependencies
 
-**Nim**: 2.2.6+ with boxy, windy, vmath, chroma (installed via `nimby sync -g nimby.lock`)  
-**Python**: 3.12.x with gymnasium, numpy, pufferlib (pulled via `pip install -e .`)  
+**Nim**: 2.2.10+ with boxy, windy, vmath, chroma (installed via `nimby sync -g nimby.lock`)
+
+**Python**: 3.12.x with gymnasium, numpy, pufferlib-core (pulled via `pip install -e .`)
+
 **System**: OpenGL for rendering

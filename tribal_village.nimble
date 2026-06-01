@@ -5,11 +5,11 @@ license     = "MIT"
 
 srcDir = "src"
 
-requires "nim >= 2.2.4"
-requires "vmath >= 2.0.0"
-requires "chroma >= 0.2.7"
-requires "boxy"
-requires "windy"
+requires "nim >= 2.2.10"
+requires "vmath >= 3.0.0"
+requires "chroma >= 1.0.0"
+requires "boxy >= 0.7.0"
+requires "windy >= 0.5.0"
 
 import std/[os, strformat, strutils]
 
@@ -45,9 +45,9 @@ task wasm, "Build Tribal Village WASM demo":
     htmlOut = root / htmlOutRel
     nimcacheRel = "build/web/nimcache"
 
-  ensureDir(outDir)
-  ensureDir(nimcacheDir)
-  ensureDir(emCacheDir)
+  mkDir(outDir)
+  mkDir(nimcacheDir)
+  mkDir(emCacheDir)
 
   if not fileExists(shellFile):
     raise newException(OSError, &"Missing Emscripten shell file at {shellFile}.")

@@ -131,7 +131,7 @@ proc ensureHeartCountLabel(count: int): string =
   ctx.fillText(text, vec2(padding.float32, padding.float32))
 
   let key = "ui/heart_count/" & $count
-  bxy.addImage(key, ctx.image, mipmaps = false)
+  bxy.addImage(key, ctx.image)
   heartCountImages[count] = key
 
   result = key
