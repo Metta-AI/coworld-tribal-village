@@ -1,7 +1,7 @@
 # Tribal Village Environment
 
 Multi‑agent RL playground in Nim with a Python wrapper (PufferLib compatible). 48 agents (8 teams, 6 per team) compete for
-resources while hostile tumors spread a freezing “clippy” tint across the map. Code: <https://github.com/Metta-AI/tribal-village>
+resources while hostile tumors spread a freezing “clippy” tint across the map. Code: <https://github.com/Metta-AI/coworld-tribal-village>
 
 <img width="2932" height="1578" alt="image" src="https://github.com/user-attachments/assets/b1736191-ff85-48fa-b5cf-f47e441fd118" />
 

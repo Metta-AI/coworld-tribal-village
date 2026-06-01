@@ -25,8 +25,8 @@ tribal-village = "tribal_village_env.cli:app"
 include-package-data = true
 
 [project.urls]
-Homepage = "https://github.com/Metta-AI/tribal-village"
-Repository = "https://github.com/Metta-AI/tribal-village.git"
+Homepage = "https://github.com/Metta-AI/coworld-tribal-village"
+Repository = "https://github.com/Metta-AI/coworld-tribal-village.git"
 
 [project.optional-dependencies]
 cogames = [
