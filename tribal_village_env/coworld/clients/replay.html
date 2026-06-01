@@ -26,14 +26,24 @@
   <script>
     const canvas = document.getElementById("world");
     const ctx = canvas.getContext("2d");
+    const buffer = document.createElement("canvas");
+    const bufferCtx = buffer.getContext("2d");
     const tick = document.getElementById("tick");
     const scores = document.getElementById("scores");
+    const drawScale = 4;
+    const teamColors = ["#f87171", "#60a5fa", "#34d399", "#fbbf24", "#c084fc", "#2dd4bf", "#fb923c", "#f472b6"];
 
     function drawFrame(frame) {
       if (!frame || frame.kind !== "rgb") return;
-      if (canvas.width !== frame.width || canvas.height !== frame.height) {
-        canvas.width = frame.width;
-        canvas.height = frame.height;
+      if (buffer.width !== frame.width || buffer.height !== frame.height) {
+        buffer.width = frame.width;
+        buffer.height = frame.height;
+      }
+      const targetWidth = frame.width * drawScale;
+      const targetHeight = frame.height * drawScale;
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
       }
       const pixels = new Uint8ClampedArray(frame.width * frame.height * 4);
       for (let i = 0, j = 0; i < frame.data.length; i += 3, j += 4) {
@@ -42,7 +52,31 @@
         pixels[j + 2] = frame.data[i + 2];
         pixels[j + 3] = 255;
       }
-      ctx.putImageData(new ImageData(pixels, frame.width, frame.height), 0, 0);
+      bufferCtx.putImageData(new ImageData(pixels, frame.width, frame.height), 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
+    }
+
+    function drawLabels(message) {
+      const frame = message.frame;
+      const agents = Array.isArray(message.agents) ? message.agents : [];
+      if (!frame || agents.length === 0) return;
+      const tile = Number(frame.tile_size || 1) * drawScale;
+      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.textBaseline = "bottom";
+      for (const agent of agents.slice().sort((a, b) => Number(a.y || 0) - Number(b.y || 0))) {
+        const slot = Number(agent.slot || 0);
+        const team = Number(agent.team || 0);
+        const label = `#${slot} ${agent.name || `Agent ${slot}`}`;
+        const textWidth = ctx.measureText(label).width;
+        const x = Math.max(textWidth / 2 + 2, Math.min(canvas.width - textWidth / 2 - 2, (Number(agent.x || 0) + 0.5) * tile));
+        const y = Math.max(12, Number(agent.y || 0) * tile - 2);
+        ctx.fillStyle = "rgba(8, 12, 10, 0.76)";
+        ctx.fillRect(Math.round(x - textWidth / 2 - 2), Math.round(y - 11), Math.ceil(textWidth + 4), 12);
+        ctx.fillStyle = teamColors[team % teamColors.length];
+        ctx.fillText(label, Math.round(x - textWidth / 2), Math.round(y));
+      }
     }
 
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/replay${location.search}`);
@@ -53,6 +87,7 @@
         scores.textContent = message.team_scores.map((v, i) => `T${i}:${Number(v).toFixed(1)}`).join(" ");
       }
       drawFrame(message.frame);
+      drawLabels(message);
     };
   </script>
 </body>

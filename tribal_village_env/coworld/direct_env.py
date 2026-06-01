@@ -231,6 +231,7 @@ class CoworldTribalVillageEnv:
             "kind": "rgb",
             "width": int(frame.shape[1]),
             "height": int(frame.shape[0]),
+            "tile_size": self.render_scale,
             "data": frame.reshape(-1).tolist(),
         }
 

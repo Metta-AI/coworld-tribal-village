@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import gzip
 import json
 import os
@@ -39,6 +40,8 @@ AGENTS_PER_TEAM = 6
 DEFAULT_MAX_STEPS = 256
 DEFAULT_TICK_RATE = 20.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 10.0
+REPLAY_SCHEMA_V1 = "tribal-village-replay-v1"
+REPLAY_SCHEMA_V2 = "tribal-village-replay-v2"
 
 
 def read_data(uri: str) -> bytes:
@@ -157,16 +160,6 @@ class CoworldConfig:
     @property
     def player_names(self) -> list[str]:
         return [player["name"] for player in self.players]
-
-    def replay_config(self) -> dict[str, Any]:
-        return {
-            "players": self.players,
-            "max_steps": self.max_steps,
-            "tick_rate": self.tick_rate,
-            "render_scale": self.render_scale,
-            "window_radius": self.window_radius,
-            "seed": self.seed,
-        }
 
 
 def _player_configs(value: Any) -> list[dict[str, str]]:
@@ -399,6 +392,7 @@ class TribalVillageCoworld:
             "scores": [float(score) for score in self.cumulative_scores],
             "team_scores": self.team_scores(),
             "player_names": self.config.player_names,
+            "agents": agent_snapshots(self.env, self.config.player_names),
             "frame": self.env.frame_payload(),
         }
 
@@ -418,10 +412,18 @@ class TribalVillageCoworld:
 
     def replay_payload(self, results: dict[str, Any]) -> dict[str, Any]:
         return {
-            "schema": "tribal-village-replay-v1",
-            "config": self.config.replay_config(),
-            "player_names": self.config.player_names,
-            "actions": self.action_log,
+            "schema": REPLAY_SCHEMA_V2,
+            "initial": {
+                "seed": self.config.seed,
+                "max_steps": self.config.max_steps,
+                "tick_rate": self.config.tick_rate,
+                "render_scale": self.config.render_scale,
+                "window_radius": self.config.window_radius,
+                "players": self.config.player_names,
+            },
+            "ticks": [
+                {"a": encode_action_delta(actions)} for actions in self.action_log
+            ],
             "results": results,
         }
 
@@ -434,28 +436,27 @@ class TribalVillageCoworld:
 
 class TribalVillageReplay:
     def __init__(self, payload: dict[str, Any]) -> None:
-        if payload.get("schema") != "tribal-village-replay-v1":
+        schema = payload.get("schema")
+        if schema == REPLAY_SCHEMA_V2:
+            config = payload.get("initial", {})
+            raw_ticks = payload.get("ticks", [])
+            self.actions = decode_tick_deltas(raw_ticks)
+        elif schema == REPLAY_SCHEMA_V1:
+            config = payload.get("config", {})
+            actions = payload.get("actions", [])
+            if not isinstance(actions, list):
+                raise ValueError("Replay actions must be an array")
+            self.actions = [
+                [_coerce_action({"action": action}) for action in tick_actions]
+                for tick_actions in actions
+                if isinstance(tick_actions, list)
+            ]
+        else:
             raise ValueError("Unsupported Tribal Village replay schema")
-        config = payload.get("config", {})
+
         if not isinstance(config, dict):
-            raise ValueError("Replay config must be an object")
-        actions = payload.get("actions", [])
-        if not isinstance(actions, list):
-            raise ValueError("Replay actions must be an array")
-        self.actions = [
-            [_coerce_action({"action": action}) for action in tick_actions]
-            for tick_actions in actions
-            if isinstance(tick_actions, list)
-        ]
-        players = config.get("players") or _default_players()
-        if not isinstance(players, list) or len(players) != PLAYER_COUNT:
-            players = _default_players()
-        self.player_names = [
-            str(player.get("name", f"Agent {slot}"))
-            if isinstance(player, dict)
-            else f"Agent {slot}"
-            for slot, player in enumerate(players)
-        ]
+            raise ValueError("Replay initial config must be an object")
+        self.player_names = replay_player_names(config.get("players"))
         self.max_steps = max(1, len(self.actions))
         self.tick_rate = float(config.get("tick_rate", DEFAULT_TICK_RATE))
         self.render_scale = max(1, int(config.get("render_scale", 1)))
@@ -508,8 +509,73 @@ class TribalVillageReplay:
             "scores": self.results.get("scores", []),
             "team_scores": self.results.get("team_scores", []),
             "player_names": self.player_names,
+            "agents": agent_snapshots(env, self.player_names),
             "frame": env.frame_payload(),
         }
+
+
+def replay_player_names(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) != PLAYER_COUNT:
+        return [player["name"] for player in _default_players()]
+    names: list[str] = []
+    for slot, player in enumerate(value):
+        if isinstance(player, dict):
+            name = str(player.get("name", "")).strip()
+        else:
+            name = str(player).strip()
+        names.append(name or f"Agent {slot}")
+    return names
+
+
+def encode_action_delta(actions: list[int]) -> str:
+    data = bytes(
+        _coerce_action({"action": action}) for action in actions[:PLAYER_COUNT]
+    )
+    if len(data) < PLAYER_COUNT:
+        data += bytes(PLAYER_COUNT - len(data))
+    return base64.b64encode(data).decode("ascii")
+
+
+def decode_tick_deltas(raw_ticks: Any) -> list[list[int]]:
+    if not isinstance(raw_ticks, list):
+        raise ValueError("Replay ticks must be an array")
+    ticks: list[list[int]] = []
+    for tick in raw_ticks:
+        if isinstance(tick, dict):
+            encoded_actions = tick.get("a", "")
+        else:
+            encoded_actions = tick
+        if not isinstance(encoded_actions, str):
+            raise ValueError("Replay tick action delta must be a string")
+        try:
+            decoded = base64.b64decode(encoded_actions.encode("ascii"), validate=True)
+        except Exception as exc:
+            raise ValueError("Replay tick action delta is not valid base64") from exc
+        ticks.append(
+            [_coerce_action({"action": action}) for action in decoded[:PLAYER_COUNT]]
+        )
+    return ticks
+
+
+def agent_snapshots(
+    env: CoworldTribalVillageEnv,
+    player_names: list[str],
+) -> list[dict[str, Any]]:
+    agents: list[dict[str, Any]] = []
+    for slot in range(PLAYER_COUNT):
+        x, y = env.agent_position(slot)
+        agents.append(
+            {
+                "slot": slot,
+                "name": (
+                    player_names[slot] if slot < len(player_names) else f"Agent {slot}"
+                ),
+                "team": slot // AGENTS_PER_TEAM,
+                "x": x,
+                "y": y,
+            }
+        )
+    return agents
 
 
 def _coerce_action(message: Any) -> int:

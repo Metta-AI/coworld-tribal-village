@@ -54,6 +54,10 @@ The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `
 `0..63`. The bundled `default-ai-agent` player uses the existing Nim role-based scripted AI in a deterministic local
 mirror and still communicates through the normal `/player` WebSocket route.
 
+Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay` autoplays, loops back to tick 0, and
+draws `#slot name` labels above agents. Replay artifacts are compact JSON: an initial seed/config plus base64-encoded
+per-tick action deltas, not rendered frame dumps.
+
 ## Configuration (Python)
 
 Pass a config dict to the Python wrapper (rendering + gameplay tuning):

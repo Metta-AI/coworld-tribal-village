@@ -85,7 +85,8 @@
     ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/player${location.search}`);
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      nameEl.textContent = message.name || `Agent ${message.slot}`;
+      const slot = Number(message.slot || 0);
+      nameEl.textContent = `#${slot} ${message.name || `Agent ${slot}`}`;
       tickEl.textContent = `tick ${message.tick}/${message.max_steps}`;
       rewardEl.textContent = `reward ${Number(message.score || 0).toFixed(2)}`;
       drawView(message.view);
