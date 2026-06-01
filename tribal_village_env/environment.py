@@ -22,6 +22,7 @@ ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
 class NimConfig(ctypes.Structure):
     _fields_ = [
         ("max_steps", ctypes.c_int32),
+        ("seed", ctypes.c_int32),
         ("tumor_spawn_rate", ctypes.c_float),
         ("heart_reward", ctypes.c_float),
         ("ore_reward", ctypes.c_float),
@@ -265,6 +266,7 @@ class TribalVillageEnv(pufferlib.PufferEnv):
     def _build_nim_config(self) -> NimConfig:
         return NimConfig(
             max_steps=int(self.max_steps),
+            seed=int(self.config.get("seed", 0)),
             tumor_spawn_rate=self._nim_float("tumor_spawn_rate"),
             heart_reward=self._nim_float("heart_reward"),
             ore_reward=self._nim_float("ore_reward"),

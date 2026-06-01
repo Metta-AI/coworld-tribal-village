@@ -191,6 +191,7 @@ type
   EnvironmentConfig* = object
     # Core game parameters
     maxSteps*: int
+    seed*: int
 
     # Combat configuration
     tumorSpawnRate*: float
@@ -1395,8 +1396,9 @@ proc plantResourceAction(env: Environment, id: int, agent: Thing, argument: int)
   inc env.stats[id].actionPlantResource
 
 proc init(env: Environment) =
-  # Use current time for random seed to get different maps each time
-  let seed = int(nowSeconds() * 1000)
+  # Coworld episodes pass a fixed seed so replay and bundled scripted players
+  # simulate the same map. Local GUI runs keep the historical random default.
+  let seed = if env.config.seed > 0: env.config.seed else: int(nowSeconds() * 1000)
   var r = initRand(seed)
 
   # Initialize tile colors to base terrain colors (neutral gray-brown)
@@ -1768,6 +1770,7 @@ proc defaultEnvironmentConfig*(): EnvironmentConfig =
   EnvironmentConfig(
     # Core game parameters
     maxSteps: 1000,
+    seed: 0,
 
     # Combat configuration
     tumorSpawnRate: 0.1,

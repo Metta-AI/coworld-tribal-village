@@ -26,6 +26,12 @@ The server sends JSON observations:
     "verb_count": 8,
     "argument_count": 8
   },
+  "game_config": {
+    "seed": 1,
+    "max_steps": 256,
+    "render_scale": 1,
+    "window_radius": 5
+  },
   "view": {
     "kind": "rgb_window",
     "width": 11,
@@ -44,6 +50,10 @@ The server sends JSON observations:
 window centered on the player's current agent, using the same tile/sprite colors
 as the global viewer. Players that want neural observations should derive them
 from this game-facing view in their own player container.
+
+The bundled `default-ai-agent` uses `game_config.seed` to run the existing Nim
+role-based scripted AI in a deterministic local mirror, then sends its selected
+slot action back over this same protocol.
 
 Players respond with one action:
 

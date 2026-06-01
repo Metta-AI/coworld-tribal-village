@@ -51,7 +51,8 @@ uv run coworld play tmp/tribal_village/coworld_manifest.json
 
 The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
 `COWORLD_PLAYER_WS_URL`, receive a rendered RGB window around their assigned agent, and send one discrete action in
-`0..63`.
+`0..63`. The bundled `default-ai-agent` player uses the existing Nim role-based scripted AI in a deterministic local
+mirror and still communicates through the normal `/player` WebSocket route.
 
 ## Configuration (Python)
 
@@ -60,6 +61,7 @@ Pass a config dict to the Python wrapper (rendering + gameplay tuning):
 ```python
 config = {
     'max_steps': 1000,          # Episode length (Python-side truncation)
+    'seed': 1,                  # Optional deterministic map seed; 0/random by default
     'render_mode': 'rgb_array', # or 'ansi'
     'render_scale': 4,          # RGB scale factor (full-map render)
     'ansi_buffer_size': 1_000_000,

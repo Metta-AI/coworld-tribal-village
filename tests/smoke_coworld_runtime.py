@@ -15,6 +15,8 @@ from urllib.request import urlopen
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from tribal_village_env.coworld.player import BuiltinAIPlayer
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_COUNT = 48
@@ -77,9 +79,31 @@ async def assert_live_websockets(port: int) -> None:
         assert message["type"] == "observation"
         assert message["slot"] == 0
         assert message["action_space"]["n"] == 64
+        assert message["game_config"]["seed"] == 1
         assert message["view"]["kind"] == "rgb_window"
         assert message["view"]["width"] > 0
         await player_ws.send(json.dumps({"type": "action", "action": 8}))
+
+
+def assert_builtin_ai_player_can_choose_action() -> None:
+    player = BuiltinAIPlayer(
+        {
+            "slot": 0,
+            "tick": 0,
+            "max_steps": 4,
+            "game_config": {
+                "seed": 1,
+                "max_steps": 4,
+                "render_scale": 1,
+                "window_radius": 5,
+            },
+        }
+    )
+    try:
+        action = player.choose_action({"slot": 0, "tick": 0})
+        assert 0 <= action < 64
+    finally:
+        player.close()
 
 
 def main() -> None:
@@ -100,6 +124,7 @@ def main() -> None:
                     "player_connect_timeout_seconds": 1,
                     "render_scale": 1,
                     "window_radius": 5,
+                    "seed": 1,
                 }
             )
         )
@@ -127,6 +152,7 @@ def main() -> None:
             wait_for_health(port, process)
             asyncio.run(assert_bad_token_rejected(port))
             asyncio.run(assert_live_websockets(port))
+            assert_builtin_ai_player_can_choose_action()
             process.wait(timeout=30)
             if process.returncode != 0:
                 stderr = process.stderr.read() if process.stderr else ""

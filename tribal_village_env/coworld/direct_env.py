@@ -19,6 +19,7 @@ DEFAULT_WINDOW_RADIUS = 5
 class NimConfig(ctypes.Structure):
     _fields_ = [
         ("max_steps", ctypes.c_int32),
+        ("seed", ctypes.c_int32),
         ("tumor_spawn_rate", ctypes.c_float),
         ("heart_reward", ctypes.c_float),
         ("ore_reward", ctypes.c_float),
@@ -106,6 +107,12 @@ class CoworldTribalVillageEnv:
                 ],
                 ctypes.c_int32,
             ),
+            ("tribal_village_reset_builtin_ai", [ctypes.c_int32], ctypes.c_int32),
+            (
+                "tribal_village_builtin_ai_actions",
+                [ctypes.c_void_p, ctypes.c_void_p],
+                ctypes.c_int32,
+            ),
             ("tribal_village_destroy", [ctypes.c_void_p], None),
             ("tribal_village_get_num_agents", [], ctypes.c_int32),
             ("tribal_village_get_map_width", [], ctypes.c_int32),
@@ -140,6 +147,7 @@ class CoworldTribalVillageEnv:
     def _apply_config(self) -> None:
         cfg = NimConfig(
             max_steps=self.max_steps,
+            seed=int(self.config.get("seed", 0)),
             tumor_spawn_rate=self._nim_float("tumor_spawn_rate"),
             heart_reward=self._nim_float("heart_reward"),
             ore_reward=self._nim_float("ore_reward"),
@@ -191,6 +199,20 @@ class CoworldTribalVillageEnv:
         if ok != 1:
             raise RuntimeError("Failed to step Nim environment")
         self.step_count += 1
+
+    def reset_builtin_ai(self, seed: int = 1) -> None:
+        ok = self.lib.tribal_village_reset_builtin_ai(ctypes.c_int32(max(1, seed)))
+        if ok != 1:
+            raise RuntimeError("Failed to reset Nim built-in AI")
+
+    def builtin_ai_actions(self) -> list[int]:
+        ok = self.lib.tribal_village_builtin_ai_actions(
+            self.env_ptr,
+            self.actions.ctypes.data_as(ctypes.c_void_p),
+        )
+        if ok != 1:
+            raise RuntimeError("Failed to compute Nim built-in AI actions")
+        return [int(action) for action in self.actions.tolist()]
 
     def render_frame(self) -> np.ndarray:
         ok = self.lib.tribal_village_render_rgb(

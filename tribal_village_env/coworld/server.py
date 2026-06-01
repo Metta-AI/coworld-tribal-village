@@ -112,6 +112,7 @@ class CoworldConfig:
     player_connect_timeout_seconds: float
     render_scale: int
     window_radius: int
+    seed: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoworldConfig":
@@ -141,6 +142,7 @@ class CoworldConfig:
             raise ValueError("player_connect_timeout_seconds must be non-negative")
         render_scale = max(1, int(data.get("render_scale", 1)))
         window_radius = max(1, int(data.get("window_radius", 5)))
+        seed = max(1, int(data.get("seed", 1)))
         return cls(
             tokens=tokens,
             players=players,
@@ -149,6 +151,7 @@ class CoworldConfig:
             player_connect_timeout_seconds=connect_timeout,
             render_scale=render_scale,
             window_radius=window_radius,
+            seed=seed,
         )
 
     @property
@@ -162,6 +165,7 @@ class CoworldConfig:
             "tick_rate": self.tick_rate,
             "render_scale": self.render_scale,
             "window_radius": self.window_radius,
+            "seed": self.seed,
         }
 
 
@@ -188,11 +192,13 @@ def _make_env(
     max_steps: int,
     render_scale: int = 1,
     window_radius: int = 5,
+    seed: int = 1,
 ) -> CoworldTribalVillageEnv:
     return CoworldTribalVillageEnv(
         max_steps=max_steps,
         render_scale=render_scale,
         window_radius=window_radius,
+        config={"seed": seed},
     )
 
 
@@ -211,6 +217,7 @@ class TribalVillageCoworld:
             max_steps=config.max_steps,
             render_scale=config.render_scale,
             window_radius=config.window_radius,
+            seed=config.seed,
         )
         self.env.reset()
         self.latest_rewards = [0.0 for _ in range(PLAYER_COUNT)]
@@ -373,6 +380,12 @@ class TribalVillageCoworld:
                 "verb_count": ACTION_VERB_COUNT,
                 "argument_count": ACTION_ARGUMENT_COUNT,
             },
+            "game_config": {
+                "seed": self.config.seed,
+                "max_steps": self.config.max_steps,
+                "render_scale": self.config.render_scale,
+                "window_radius": self.config.window_radius,
+            },
             "view": self.env.player_view(slot),
         }
 
@@ -447,6 +460,7 @@ class TribalVillageReplay:
         self.tick_rate = float(config.get("tick_rate", DEFAULT_TICK_RATE))
         self.render_scale = max(1, int(config.get("render_scale", 1)))
         self.window_radius = max(1, int(config.get("window_radius", 5)))
+        self.seed = max(1, int(config.get("seed", 1)))
         self.results = payload.get("results", {})
 
     async def stream(self, websocket: WebSocket) -> None:
@@ -455,6 +469,7 @@ class TribalVillageReplay:
             max_steps=self.max_steps,
             render_scale=self.render_scale,
             window_radius=self.window_radius,
+            seed=self.seed,
         )
         try:
             env.reset()
@@ -466,6 +481,7 @@ class TribalVillageReplay:
                         max_steps=self.max_steps,
                         render_scale=self.render_scale,
                         window_radius=self.window_radius,
+                        seed=self.seed,
                     )
                     env.reset()
                     await asyncio.sleep(0.2)

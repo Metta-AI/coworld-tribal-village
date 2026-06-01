@@ -2,6 +2,7 @@
 ## Zero-copy numpy buffer communication - no conversions
 
 import vmath
+import ai
 import environment, external_actions
 
 type
@@ -9,6 +10,7 @@ type
   ## Use NaN for float fields (or <=0 for maxSteps) to keep Nim defaults.
   CEnvironmentConfig* = object
     maxSteps*: int32
+    seed*: int32
     tumorSpawnRate*: float32
     heartReward*: float32
     oreReward*: float32
@@ -31,6 +33,8 @@ proc applyConfig(cfg: CEnvironmentConfig): EnvironmentConfig =
   result = defaultEnvironmentConfig()
   if cfg.maxSteps > 0:
     result.maxSteps = cfg.maxSteps.int
+  if cfg.seed > 0:
+    result.seed = cfg.seed.int
 
   template applyFloat(field: untyped, value: float32) =
     if not isNan32(value):
@@ -52,6 +56,7 @@ proc applyConfig(cfg: CEnvironmentConfig): EnvironmentConfig =
   applyFloat(deathPenalty, cfg.deathPenalty)
 
 var globalEnv: Environment = nil
+var coworldBuiltinAi: Controller = nil
 
 const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   # Matches previous hardcoded RGB choices for renderer export.
@@ -215,6 +220,33 @@ proc tribal_village_step_for_coworld(
   except:
     return 0
 
+proc tribal_village_reset_builtin_ai(seed: int32): int32 {.exportc, dynlib.} =
+  ## Reset the bundled scripted AI used by Coworld player containers.
+  try:
+    let controllerSeed = if seed > 0: seed.int else: 1
+    coworldBuiltinAi = newController(controllerSeed)
+    return 1
+  except:
+    return 0
+
+proc tribal_village_builtin_ai_actions(
+  env: pointer,
+  actions_buffer: ptr UncheckedArray[uint8]
+): int32 {.exportc, dynlib.} =
+  ## Compute one full 48-agent action vector from the existing Nim AI.
+  if globalEnv == nil or actions_buffer.isNil:
+    return 0
+  try:
+    discard env
+    if coworldBuiltinAi == nil:
+      coworldBuiltinAi = newController(1)
+    for i in 0..<MapAgents:
+      actions_buffer[i] = coworldBuiltinAi.decideAction(globalEnv, i)
+    coworldBuiltinAi.updateController()
+    return 1
+  except:
+    return 0
+
 proc tribal_village_get_num_agents(): int32 {.exportc, dynlib.} =
   return MapAgents.int32
 
@@ -310,6 +342,7 @@ proc tribal_village_get_obs_height(): int32 {.exportc, dynlib.} =
 
 proc tribal_village_destroy(env: pointer) {.exportc, dynlib.} =
   ## Clean up environment
+  coworldBuiltinAi = nil
   globalEnv = nil
 
 # --- Rendering interface (ANSI) ---
