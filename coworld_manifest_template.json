@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/Metta-AI/coworld/main/src/coworld/coworld_manifest_schema.json",
   "game": {
-    "name": "coworld-tribal-village",
+    "name": "tribal_village",
     "description": "A 48-agent Tribal Village Coworld where each player controls one village agent gathering, crafting, fighting tumors, and supporting its team.",
     "owner": "info@metta.ai",
     "runnable": {
