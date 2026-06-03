@@ -116,6 +116,10 @@
       }
     },
     "docs": {
+      "readme": {
+        "type": "uri",
+        "value": "https://github.com/Metta-AI/coworld-tribal-village/blob/main/README.md"
+      },
       "pages": [
         {
           "id": "rules.md",
@@ -147,7 +151,16 @@
     }
   ],
   "reporter": [],
-  "commissioner": [],
+  "commissioner": [
+    {
+      "id": "default-commissioner",
+      "name": "Default Commissioner",
+      "type": "commissioner",
+      "description": "Game-agnostic round-robin commissioner with mean-score rankings.",
+      "source_url": "https://github.com/Metta-AI/commissioners/tree/main/commissioners/default/default_commissioner",
+      "image": "{{COMMISSIONER_IMAGE}}"
+    }
+  ],
   "grader": [],
   "diagnoser": [],
   "optimizer": [],
