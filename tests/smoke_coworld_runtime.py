@@ -137,7 +137,23 @@ def assert_builtin_ai_player_can_choose_action() -> None:
         player.close()
 
 
+def assert_client_websockets_are_proxy_relative() -> None:
+    client_dir = ROOT / "tribal_village_env" / "coworld" / "clients"
+    for client, websocket_path in {
+        "global.html": "/global",
+        "player.html": "/player",
+        "replay.html": "/replay",
+    }.items():
+        html = (client_dir / client).read_text()
+        assert "function websocketAddress(path)" in html
+        assert "new URL(address || window.location.href, window.location.href)" in html
+        assert f'websocketAddress("{websocket_path}")' in html
+        assert f"${{location.host}}{websocket_path}" not in html
+    assert "replace(/\\/client\\/replay(\\/.*)?$/, `${path}$1`)" in (client_dir / "replay.html").read_text()
+
+
 def main() -> None:
+    assert_client_websockets_are_proxy_relative()
     with tempfile.TemporaryDirectory(prefix="tribal-village-coworld-") as temp:
         tempdir = Path(temp)
         config_path = tempdir / "config.json"

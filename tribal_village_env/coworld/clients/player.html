@@ -82,7 +82,19 @@
       ctx.putImageData(new ImageData(pixels, view.width, view.height), 0, 0);
     }
 
-    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/player${location.search}`);
+    const pageUrl = new URL(window.location.href);
+
+    function websocketAddress(path) {
+      const address = pageUrl.searchParams.get("address");
+      const target = new URL(address || window.location.href, window.location.href);
+      if (target.protocol === "http:") target.protocol = "ws:";
+      if (target.protocol === "https:") target.protocol = "wss:";
+      if (!address) target.pathname = target.pathname.replace(/\/client\/player$/, path);
+      target.hash = "";
+      return target.toString();
+    }
+
+    ws = new WebSocket(websocketAddress("/player"));
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       const slot = Number(message.slot || 0);

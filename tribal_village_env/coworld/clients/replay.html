@@ -79,7 +79,19 @@
       }
     }
 
-    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/replay${location.search}`);
+    const pageUrl = new URL(window.location.href);
+
+    function websocketAddress(path) {
+      const address = pageUrl.searchParams.get("address");
+      const target = new URL(address || window.location.href, window.location.href);
+      if (target.protocol === "http:") target.protocol = "ws:";
+      if (target.protocol === "https:") target.protocol = "wss:";
+      if (!address) target.pathname = target.pathname.replace(/\/client\/replay(\/.*)?$/, `${path}$1`);
+      target.hash = "";
+      return target.toString();
+    }
+
+    const ws = new WebSocket(websocketAddress("/replay"));
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       tick.textContent = `tick ${message.tick}/${message.max_steps}`;
