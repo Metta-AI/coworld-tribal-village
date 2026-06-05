@@ -7,7 +7,8 @@
     "runnable": {
       "type": "game",
       "image": "{{TRIBAL_VILLAGE_IMAGE}}",
-      "run": ["python", "-m", "tribal_village_env.coworld.server"]
+      "run": ["python", "-m", "tribal_village_env.coworld.server"],
+      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main"
     },
     "config_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -125,16 +126,16 @@
           "id": "rules.md",
           "title": "rules.md",
           "content": {
-            "type": "text",
-            "value": "# Tribal Village Rules\n\nTribal Village has 48 player slots. Each slot controls one agent in an eight-team village, with six agents per team. Agents gather ore, water, wheat, and wood; craft batteries, spears, lanterns, armor, and bread; fight hostile tumors; and support their team's survival. Each player receives a rendered RGB view window and sends one discrete action per tick. The bundled default player runs the existing Nim role-based scripted AI in a deterministic local mirror and still sends actions through the `/player` route. Final scores are cumulative per-agent rewards, with team scores computed by summing each team's six agents."
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/coworld-tribal-village/blob/main/docs/rules.md"
           }
         },
         {
           "id": "play_tribal_village.md",
           "title": "play_tribal_village.md",
           "content": {
-            "type": "text",
-            "value": "# Play Tribal Village\n\nRun a local episode with `coworld play coworld_manifest.json` or a headless smoke with `coworld run-episode coworld_manifest.json`. Open `/client/global` to watch the map, `/client/player?slot=0&token=...` to inspect or control a slot, and `/client/replay` to view saved replay action logs. Player containers should connect to the exact `COWORLD_PLAYER_WS_URL` supplied by the runner and send JSON actions shaped as `{ \"type\": \"action\", \"action\": 0 }`. The packaged `default-ai-agent` player uses the same image and WebSocket route as tournament players. Replay mode autoplays, loops, and draws `#slot name` labels above agents; replay artifacts store only the deterministic initial config plus compact per-tick action deltas.\n\nIf docs, commands, runtime behavior, logs, or replays disagree, preserve the evidence and file a GitHub issue at https://github.com/Metta-AI/coworld-tribal-village/issues for Tribal Village issues or https://github.com/Metta-AI/coworld/issues for Softmax play prompt and Coworld CLI issues. Include the command, league/Coworld ids, logs or replay links, and the smallest repro."
+            "type": "uri",
+            "value": "https://github.com/Metta-AI/coworld-tribal-village/blob/main/docs/play_tribal_village.md"
           }
         }
       ]
