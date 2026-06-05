@@ -58,13 +58,11 @@ Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay
 draws `#slot name` labels above agents. Replay artifacts are compact JSON: an initial seed/config plus base64-encoded
 per-tick action deltas, not rendered frame dumps.
 
-If docs, commands, runtime behavior, logs, or replays disagree while you are
-building or submitting a Tribal Village policy, preserve the evidence and file a
-GitHub issue at <https://github.com/Metta-AI/coworld-tribal-village/issues>.
-For Softmax play prompt or Coworld CLI issues, file against
-<https://github.com/Metta-AI/coworld/issues>. Include the command, league/Coworld
-ids, logs or replay links, and the smallest repro instead of silently working
-around the issue.
+When docs, commands, runtime behavior, logs, or replays disagree while you are
+building or submitting a Tribal Village policy, preserve the evidence and file
+an issue in the Coworld repo: <https://github.com/Metta-AI/coworld/issues>.
+Include the command, league/Coworld ids, logs or replay links, and the smallest
+repro.
 
 ## Configuration (Python)
 

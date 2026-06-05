@@ -11,7 +11,6 @@ WebSocket route as tournament players.
 Replay mode autoplays, loops, and draws `#slot name` labels above agents. Replay artifacts store only the deterministic
 initial config plus compact per-tick action deltas.
 
-If docs, commands, runtime behavior, logs, or replays disagree, preserve the evidence and file a GitHub issue at
-https://github.com/Metta-AI/coworld-tribal-village/issues for Tribal Village issues or
-https://github.com/Metta-AI/coworld/issues for Softmax play prompt and Coworld CLI issues. Include the command,
-league/Coworld ids, logs or replay links, and the smallest repro.
+When docs, commands, runtime behavior, logs, or replays disagree, preserve the evidence and file an issue in the
+Coworld repo: https://github.com/Metta-AI/coworld/issues. Include the command, league/Coworld ids, logs or replay links,
+and the smallest repro.
