@@ -23,6 +23,7 @@ from tribal_village_env.coworld.player import BuiltinAIPlayer
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_COUNT = 48
+SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1"
 
 
 def free_port() -> int:
@@ -45,11 +46,11 @@ def wait_for_health(port: int, process: subprocess.Popen[str]) -> None:
     raise TimeoutError("timed out waiting for Coworld healthz")
 
 
-async def assert_bad_token_rejected(port: int) -> None:
+async def assert_websocket_rejected(url: str, failure_message: str) -> None:
     rejected = False
     try:
         async with websockets.connect(
-            f"ws://127.0.0.1:{port}/player?slot=0&token=bad",
+            url,
             open_timeout=5,
             max_size=None,
         ) as websocket:
@@ -60,7 +61,7 @@ async def assert_bad_token_rejected(port: int) -> None:
     except InvalidStatus as exc:
         rejected = exc.response.status_code in {401, 403}
     if not rejected:
-        raise AssertionError("bad token was accepted")
+        raise AssertionError(failure_message)
 
 
 async def assert_live_websockets(port: int) -> None:
@@ -71,7 +72,8 @@ async def assert_live_websockets(port: int) -> None:
     ) as global_ws:
         message, cell_bytes = await recv_world_frame(global_ws)
         assert message["type"] == "state"
-        assert message["frame"]["kind"] == "tribal-village-cells-v1"
+        assert message["frame"]["kind"] == SPRITE_FRAME_KIND
+        assert message["frame"]["encoding"] == "uint8-arraybuffer"
         assert len(cell_bytes) == (
             message["frame"]["width"]
             * message["frame"]["height"]
@@ -108,7 +110,8 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
             message, cell_bytes = await recv_world_frame(replay_ws)
             assert message["type"] == "replay"
             assert message["started"] is True
-            assert message["frame"]["kind"] == "tribal-village-cells-v1"
+            assert message["frame"]["kind"] == SPRITE_FRAME_KIND
+            assert message["frame"]["encoding"] == "uint8-arraybuffer"
             assert len(cell_bytes) == (
                 message["frame"]["width"]
                 * message["frame"]["height"]
@@ -168,6 +171,7 @@ def assert_client_websockets_are_proxy_relative() -> None:
         assert 'kind !== "rgb"' not in html
         assert f"${{location.host}}{websocket_path}" not in html
     common_js = (client_dir / "view_common.js").read_text()
+    assert f'const SPRITE_FRAME_KIND = "{SPRITE_FRAME_KIND}"' in common_js
     assert "function routedHttpAddress" in common_js
     assert "function websocketAddress" in common_js
     assert "function assetBaseAddress" in common_js
@@ -236,7 +240,18 @@ def main() -> None:
         try:
             wait_for_health(port, process)
             assert_static_clients_are_served(port)
-            asyncio.run(assert_bad_token_rejected(port))
+            asyncio.run(
+                assert_websocket_rejected(
+                    f"ws://127.0.0.1:{port}/player?slot=0&token=bad",
+                    "bad token was accepted",
+                )
+            )
+            asyncio.run(
+                assert_websocket_rejected(
+                    f"ws://127.0.0.1:{port}/replay",
+                    "live runtime accepted /replay as a visual stream",
+                )
+            )
             asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()
             process.wait(timeout=30)
@@ -284,6 +299,18 @@ def main() -> None:
         )
         try:
             wait_for_health(replay_port, replay_process)
+            asyncio.run(
+                assert_websocket_rejected(
+                    f"ws://127.0.0.1:{replay_port}/global",
+                    "replay runtime accepted /global as a visual stream",
+                )
+            )
+            asyncio.run(
+                assert_websocket_rejected(
+                    f"ws://127.0.0.1:{replay_port}/player?slot=0&token=token-0",
+                    "replay runtime accepted /player",
+                )
+            )
             asyncio.run(assert_replay_autoplays_and_loops(replay_port))
         finally:
             if replay_process.poll() is None:

@@ -21,6 +21,7 @@ from tribal_village_env.coworld.direct_env import (
     ACTION_ARGUMENT_COUNT,
     ACTION_SPACE_SIZE,
     ACTION_VERB_COUNT,
+    COWORLD_SPRITE_FRAME_KIND,
     CoworldTribalVillageEnv,
 )
 
@@ -269,7 +270,7 @@ class TribalVillageCoworld:
         await websocket.accept()
         try:
             while True:
-                await send_world_snapshot(websocket, self.env, self.snapshot("state"))
+                await send_sprite_snapshot(websocket, self.env, self.snapshot("state"))
                 if self.done:
                     break
                 await asyncio.sleep(0.25)
@@ -460,7 +461,7 @@ class TribalVillageReplay:
         try:
             env.reset()
             while True:
-                await send_world_snapshot(websocket, env, self._snapshot(env))
+                await send_sprite_snapshot(websocket, env, self._snapshot(env))
                 if env.step_count >= len(self.actions):
                     env.close()
                     env = _make_env(
@@ -560,12 +561,14 @@ def agent_snapshots(
     return agents
 
 
-async def send_world_snapshot(
+async def send_sprite_snapshot(
     websocket: WebSocket,
     env: CoworldTribalVillageEnv,
     message: dict[str, Any],
 ) -> None:
-    frame_meta, cell_bytes = env.world_frame()
+    frame_meta, cell_bytes = env.sprite_frame()
+    if frame_meta["kind"] != COWORLD_SPRITE_FRAME_KIND:
+        raise RuntimeError("Coworld visual stream must use sprite-cell frames")
     message["frame"] = {**frame_meta, "asset_base": "/assets"}
     await websocket.send_json(message)
     await websocket.send_bytes(cell_bytes)
@@ -680,9 +683,9 @@ def sprite_asset(asset_path: str) -> FileResponse:
 async def global_viewer(websocket: WebSocket) -> None:
     active = _runtime()
     if isinstance(active, TribalVillageReplay):
-        await active.stream(websocket)
-    else:
-        await active.global_viewer(websocket)
+        await websocket.close(code=1008)
+        return
+    await active.global_viewer(websocket)
 
 
 @app.websocket("/replay")
@@ -691,7 +694,7 @@ async def replay_viewer(websocket: WebSocket) -> None:
     if isinstance(active, TribalVillageReplay):
         await active.stream(websocket)
     else:
-        await active.global_viewer(websocket)
+        await websocket.close(code=1008)
 
 
 @app.websocket("/player")
