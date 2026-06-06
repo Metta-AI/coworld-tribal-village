@@ -28,8 +28,6 @@ class BuiltinAIPlayer:
             max_steps=int(
                 first_message.get("max_steps", game_config.get("max_steps", 1))
             ),
-            render_scale=max(1, int(game_config.get("render_scale", 1))),
-            window_radius=max(1, int(game_config.get("window_radius", 5))),
             config={"seed": self.seed},
         )
         self.env.reset()

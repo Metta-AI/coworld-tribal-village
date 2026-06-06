@@ -55,20 +55,6 @@
           "minimum": 0,
           "default": 10
         },
-        "render_scale": {
-          "description": "Integer scale for RGB browser frames.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4,
-          "default": 1
-        },
-        "window_radius": {
-          "description": "Rendered tile radius around each agent for player view windows.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 16,
-          "default": 5
-        },
         "seed": {
           "description": "Deterministic episode seed used for map generation, replay, and bundled scripted AI mirrors.",
           "type": "integer",
@@ -174,8 +160,6 @@
         "max_steps": 128,
         "tick_rate": 20,
         "player_connect_timeout_seconds": 10,
-        "render_scale": 1,
-        "window_radius": 5,
         "seed": 1,
         "players": [
           {"name": "Agent 0"},
@@ -235,8 +219,6 @@
       "max_steps": 64,
       "tick_rate": 20,
       "player_connect_timeout_seconds": 10,
-      "render_scale": 1,
-      "window_radius": 5,
       "seed": 1,
       "players": [
         {"name": "Agent 0"},

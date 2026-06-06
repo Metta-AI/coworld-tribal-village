@@ -3,32 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Tribal Village Player</title>
   <style>
-    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    body { margin: 0; background: #101412; color: #e7ece4; }
-    main { display: grid; grid-template-columns: minmax(280px, 1fr) 280px; min-height: 100vh; }
-    canvas { width: 100%; height: 100vh; image-rendering: pixelated; display: block; background: #1c211c; }
-    aside { border-left: 1px solid #2b332e; padding: 12px; display: grid; align-content: start; gap: 12px; }
-    h1 { margin: 0; font-size: 16px; }
-    .stat { color: #b8c7bb; font-size: 13px; }
-    .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-    button, select { background: #232a25; color: #e7ece4; border: 1px solid #405045; min-height: 34px; }
-    button:hover, select:hover { border-color: #91b49c; }
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #080b0a; color: #eef2ee; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; overflow: hidden; background: #080b0a; }
+    main { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+    #world { display: block; width: 100%; height: 100%; cursor: grab; background: #080b0a; }
+    #world.dragging { cursor: grabbing; }
+    button, select { min-height: 32px; border: 1px solid rgba(225, 235, 229, .22); background: rgba(20, 28, 25, .94); color: #eef2ee; font: inherit; }
+    button:hover, select:hover { border-color: rgba(255, 226, 151, .72); }
+    .badge, .control-panel, .minimap-panel, .tile-panel { position: absolute; z-index: 3; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
+    .top-status { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; gap: 6px; align-items: start; width: calc(100vw - 230px); pointer-events: none; }
+    .badge { display: flex; flex: 0 0 auto; gap: 6px; align-items: center; min-height: 42px; padding: 6px 8px; color: #dce5e0; font-size: 12px; }
+    .badge strong { color: #fff3bf; font-size: 12px; }
+    .badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-panel { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 7px; min-width: 150px; max-width: 360px; max-height: 58px; padding: 6px 8px; overflow: hidden; pointer-events: none; }
+    .tile-panel[hidden] { display: none; }
+    .tile-panel strong { color: #fff3bf; font-size: 12px; white-space: nowrap; }
+    .tile-panel span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c5bf; font-size: 11px; }
+    .control-panel { right: 12px; top: 12px; width: 204px; display: grid; gap: 8px; padding: 8px; }
+    .control-panel h1 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff3bf; font-size: 13px; }
+    .stat { color: #b8c5bf; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .buttons button { min-width: 0; padding-inline: 4px; font-size: 12px; }
+    .minimap-panel { left: 12px; bottom: 12px; width: clamp(180px, 24vw, 250px); padding: 6px; }
+    #minimap { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #050706; border: 1px solid rgba(238, 242, 238, .2); }
     @media (max-width: 760px) {
-      main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-      canvas { height: calc(100vh - 180px); }
-      aside { border-left: 0; border-top: 1px solid #2b332e; }
+      .top-status { width: calc(100vw - 24px); }
+      .control-panel { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; grid-template-columns: 1fr; }
+      .minimap-panel { display: none; }
     }
   </style>
 </head>
 <body>
   <main>
-    <canvas id="obs" width="22" height="22"></canvas>
-    <aside>
+    <canvas id="world"></canvas>
+    <div class="top-status">
+      <div class="badge"><strong id="playerName">Agent</strong><span id="status">connecting</span></div>
+      <section class="tile-panel" id="tilePanel" hidden>
+        <strong data-coords>-</strong>
+        <span data-body></span>
+      </section>
+    </div>
+    <section class="control-panel">
       <h1 id="name">Agent</h1>
       <div class="stat" id="tick">tick 0</div>
-      <div class="stat" id="reward">reward 0</div>
+      <div class="stat" id="reward">score 0.00</div>
       <select id="verb">
         <option value="0">Noop</option>
         <option value="1" selected>Move</option>
@@ -40,69 +63,63 @@
         <option value="7">Plant</option>
       </select>
       <div class="buttons" id="dirs"></div>
-    </aside>
+    </section>
+    <section class="minimap-panel">
+      <canvas id="minimap" width="256" height="144"></canvas>
+    </section>
   </main>
+  <script src="./common/view_common.js"></script>
   <script>
-    const canvas = document.getElementById("obs");
-    const ctx = canvas.getContext("2d");
+    const pageUrl = new URL(window.location.href);
+    const slot = Number(pageUrl.searchParams.get("slot") || 0);
+    const renderer = new TribalVillageView.WorldRenderer(
+      document.getElementById("world"),
+      {
+        minimap: document.getElementById("minimap"),
+        tilePanel: document.getElementById("tilePanel"),
+        followSlot: slot,
+      }
+    );
+    const statusEl = document.getElementById("status");
     const nameEl = document.getElementById("name");
+    const playerNameEl = document.getElementById("playerName");
     const tickEl = document.getElementById("tick");
     const rewardEl = document.getElementById("reward");
     const verbEl = document.getElementById("verb");
     const dirsEl = document.getElementById("dirs");
     const directions = ["N", "S", "W", "E", "NW", "NE", "SW", "SE"];
-    let ws;
+    let actionSocket = null;
+
+    const worldSocket = new WebSocket(TribalVillageView.websocketAddress(/\/client\/player$/, "/global"));
+    TribalVillageView.attachWorldSocket(worldSocket, renderer, (message) => {
+      statusEl.textContent = `world tick ${message.tick}/${message.max_steps}`;
+    });
 
     function sendAction(argument) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!actionSocket || actionSocket.readyState !== WebSocket.OPEN) return;
       const verb = Number(verbEl.value);
-      ws.send(JSON.stringify({type: "action", action: verb * 8 + argument}));
+      actionSocket.send(JSON.stringify({type: "action", action: verb * 8 + argument}));
     }
 
     directions.forEach((label, index) => {
       const button = document.createElement("button");
+      button.type = "button";
       button.textContent = label;
       button.onclick = () => sendAction(index);
       dirsEl.appendChild(button);
     });
 
-    function drawView(view) {
-      if (!view || view.kind !== "rgb_window" || !Array.isArray(view.data)) return;
-      if (canvas.width !== view.width || canvas.height !== view.height) {
-        canvas.width = view.width;
-        canvas.height = view.height;
-      }
-      const pixels = new Uint8ClampedArray(view.width * view.height * 4);
-      for (let i = 0, j = 0; i < view.data.length; i += 3, j += 4) {
-        pixels[j] = view.data[i];
-        pixels[j + 1] = view.data[i + 1];
-        pixels[j + 2] = view.data[i + 2];
-        pixels[j + 3] = 255;
-      }
-      ctx.putImageData(new ImageData(pixels, view.width, view.height), 0, 0);
-    }
-
-    const pageUrl = new URL(window.location.href);
-
-    function websocketAddress(path) {
-      const address = pageUrl.searchParams.get("address");
-      const target = new URL(address || window.location.href, window.location.href);
-      if (target.protocol === "http:") target.protocol = "ws:";
-      if (target.protocol === "https:") target.protocol = "wss:";
-      if (!address) target.pathname = target.pathname.replace(/\/client\/player$/, path);
-      target.hash = "";
-      return target.toString();
-    }
-
-    ws = new WebSocket(websocketAddress("/player"));
-    ws.onmessage = (event) => {
+    actionSocket = new WebSocket(TribalVillageView.playerSocketAddress());
+    actionSocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      const slot = Number(message.slot || 0);
-      nameEl.textContent = `#${slot} ${message.name || `Agent ${slot}`}`;
+      const label = `#${message.slot} ${message.name || `Agent ${message.slot}`}`;
+      nameEl.textContent = label;
+      playerNameEl.textContent = label;
       tickEl.textContent = `tick ${message.tick}/${message.max_steps}`;
-      rewardEl.textContent = `reward ${Number(message.score || 0).toFixed(2)}`;
-      drawView(message.view);
+      rewardEl.textContent = `score ${Number(message.score || 0).toFixed(2)}`;
+      renderer.setFollowSlot(Number(message.slot));
     };
+    actionSocket.onclose = () => { rewardEl.textContent = "controls closed"; };
   </script>
 </body>
 </html>

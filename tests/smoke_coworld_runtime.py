@@ -11,6 +11,7 @@ import tempfile
 import time
 import zlib
 from pathlib import Path
+from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -68,10 +69,14 @@ async def assert_live_websockets(port: int) -> None:
         open_timeout=5,
         max_size=None,
     ) as global_ws:
-        message = json.loads(await asyncio.wait_for(global_ws.recv(), timeout=10))
+        message, cell_bytes = await recv_world_frame(global_ws)
         assert message["type"] == "state"
-        assert message["frame"]["kind"] == "rgb"
-        assert message["frame"]["tile_size"] == 1
+        assert message["frame"]["kind"] == "tribal-village-cells-v1"
+        assert len(cell_bytes) == (
+            message["frame"]["width"]
+            * message["frame"]["height"]
+            * message["frame"]["stride"]
+        )
         assert len(message["agents"]) == PLAYER_COUNT
         assert message["agents"][0]["slot"] == 0
         assert message["agents"][0]["name"] == "Agent 0"
@@ -86,8 +91,8 @@ async def assert_live_websockets(port: int) -> None:
         assert message["slot"] == 0
         assert message["action_space"]["n"] == 64
         assert message["game_config"]["seed"] == 1
-        assert message["view"]["kind"] == "rgb_window"
-        assert message["view"]["width"] > 0
+        assert "view" not in message
+        assert "frame" not in message
         await player_ws.send(json.dumps({"type": "action", "action": 8}))
 
 
@@ -100,10 +105,15 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
         seen_done = False
         seen_loop = False
         for _ in range(12):
-            message = json.loads(await asyncio.wait_for(replay_ws.recv(), timeout=10))
+            message, cell_bytes = await recv_world_frame(replay_ws)
             assert message["type"] == "replay"
             assert message["started"] is True
-            assert message["frame"]["kind"] == "rgb"
+            assert message["frame"]["kind"] == "tribal-village-cells-v1"
+            assert len(cell_bytes) == (
+                message["frame"]["width"]
+                * message["frame"]["height"]
+                * message["frame"]["stride"]
+            )
             assert len(message["agents"]) == PLAYER_COUNT
             assert message["agents"][0]["slot"] == 0
             assert message["agents"][0]["name"] == "Agent 0"
@@ -116,6 +126,15 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
         assert seen_loop
 
 
+async def recv_world_frame(websocket: Any) -> tuple[dict[str, Any], bytes]:
+    raw_message = await asyncio.wait_for(websocket.recv(), timeout=10)
+    assert isinstance(raw_message, str)
+    message = json.loads(raw_message)
+    raw_cells = await asyncio.wait_for(websocket.recv(), timeout=10)
+    assert isinstance(raw_cells, bytes)
+    return message, raw_cells
+
+
 def assert_builtin_ai_player_can_choose_action() -> None:
     player = BuiltinAIPlayer(
         {
@@ -125,8 +144,6 @@ def assert_builtin_ai_player_can_choose_action() -> None:
             "game_config": {
                 "seed": 1,
                 "max_steps": 4,
-                "render_scale": 1,
-                "window_radius": 5,
             },
         }
     )
@@ -145,11 +162,30 @@ def assert_client_websockets_are_proxy_relative() -> None:
         "replay.html": "/replay",
     }.items():
         html = (client_dir / client).read_text()
-        assert "function websocketAddress(path)" in html
-        assert "new URL(address || window.location.href, window.location.href)" in html
-        assert f'websocketAddress("{websocket_path}")' in html
+        assert './common/view_common.js' in html
+        assert 'src="/client/' not in html
+        assert "rgb_window" not in html
+        assert 'kind !== "rgb"' not in html
         assert f"${{location.host}}{websocket_path}" not in html
-    assert "replace(/\\/client\\/replay(\\/.*)?$/, `${path}$1`)" in (client_dir / "replay.html").read_text()
+    common_js = (client_dir / "view_common.js").read_text()
+    assert "function routedHttpAddress" in common_js
+    assert "function websocketAddress" in common_js
+    assert "function assetBaseAddress" in common_js
+    assert "new URL(address || window.location.href, window.location.href)" in common_js
+    assert "drawFrame(frame)" not in common_js
+
+
+def assert_static_clients_are_served(port: int) -> None:
+    with urlopen(
+        f"http://127.0.0.1:{port}/client/common/view_common.js", timeout=5
+    ) as response:
+        assert response.status == 200
+        assert b"WorldRenderer" in response.read()
+    with urlopen(
+        f"http://127.0.0.1:{port}/assets/objects/floor.png", timeout=5
+    ) as response:
+        assert response.status == 200
+        assert response.read(8) == b"\x89PNG\r\n\x1a\n"
 
 
 def main() -> None:
@@ -170,8 +206,6 @@ def main() -> None:
                     "max_steps": 4,
                     "tick_rate": 20,
                     "player_connect_timeout_seconds": 1,
-                    "render_scale": 1,
-                    "window_radius": 5,
                     "seed": 1,
                 }
             )
@@ -198,6 +232,7 @@ def main() -> None:
         )
         try:
             wait_for_health(port, process)
+            assert_static_clients_are_served(port)
             asyncio.run(assert_bad_token_rejected(port))
             asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()

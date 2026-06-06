@@ -74,6 +74,24 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   (r: 255'u8, g: 240'u8, b: 128'u8)   # PlantedLantern
 ]
 
+const CoworldCellStride* = 24
+const CoworldNoThing* = 255'u8
+
+proc toByte(value: float32): uint8 =
+  var iv = int(value * 255.0)
+  if iv < 0:
+    iv = 0
+  elif iv > 255:
+    iv = 255
+  result = uint8(iv)
+
+proc toCountByte(value: int): uint8 =
+  if value <= 0:
+    return 0'u8
+  if value >= 255:
+    return 255'u8
+  result = uint8(value)
+
 proc tribal_village_create(): pointer {.exportc, dynlib.} =
   ## Create environment for direct buffer interface
   try:
@@ -283,14 +301,95 @@ proc tribal_village_get_agent_y(
     return -1
   return globalEnv.agents[idx].pos.y
 
-# Render full map as HxWx3 RGB (uint8)
-proc toByte(value: float32): uint8 =
-  var iv = int(value * 255.0)
-  if iv < 0:
-    iv = 0
-  elif iv > 255:
-    iv = 255
-  result = uint8(iv)
+# Export compact Coworld cell state for sprite-based browser clients.
+proc tribal_village_export_world_cells(
+  env: pointer,
+  out_buffer: ptr UncheckedArray[uint8],
+  out_len: int32
+): int32 {.exportc, dynlib.} =
+  discard env
+  if globalEnv == nil or out_buffer.isNil:
+    return 0
+
+  let required = MapWidth * MapHeight * CoworldCellStride
+  if out_len.int < required:
+    return 0
+
+  for y in 0 ..< MapHeight:
+    for x in 0 ..< MapWidth:
+      let idx = (y * MapWidth + x) * CoworldCellStride
+      let tileColor = globalEnv.tileColors[x][y]
+      let finalR = min(tileColor.r * tileColor.intensity, 1.5'f32)
+      let finalG = min(tileColor.g * tileColor.intensity, 1.5'f32)
+      let finalB = min(tileColor.b * tileColor.intensity, 1.5'f32)
+
+      out_buffer[idx] = ord(globalEnv.terrain[x][y]).uint8
+      out_buffer[idx + 1] = toByte(finalR)
+      out_buffer[idx + 2] = toByte(finalG)
+      out_buffer[idx + 3] = toByte(finalB)
+      out_buffer[idx + 4] = CoworldNoThing
+      out_buffer[idx + 5] = 0'u8
+      out_buffer[idx + 6] = CoworldNoThing
+      out_buffer[idx + 7] = CoworldNoThing
+      out_buffer[idx + 8] = 0'u8
+      out_buffer[idx + 9] = 0'u8
+      out_buffer[idx + 10] = 0'u8
+      out_buffer[idx + 11] = 0'u8
+      out_buffer[idx + 12] = 0'u8
+      out_buffer[idx + 13] = 0'u8
+      out_buffer[idx + 14] = 0'u8
+      out_buffer[idx + 15] = 0'u8
+      out_buffer[idx + 16] = 0'u8
+      out_buffer[idx + 17] = 0'u8
+      out_buffer[idx + 18] = 0'u8
+      out_buffer[idx + 19] = 0'u8
+      out_buffer[idx + 20] = 0'u8
+      out_buffer[idx + 21] = 0'u8
+      out_buffer[idx + 22] = 0'u8
+      out_buffer[idx + 23] = 0'u8
+
+      let thing = globalEnv.grid[x][y]
+      if thing != nil:
+        out_buffer[idx + 4] = ord(thing.kind).uint8
+        out_buffer[idx + 5] = ord(thing.orientation).uint8
+        out_buffer[idx + 8] = toCountByte(thing.hp)
+        out_buffer[idx + 9] = toCountByte(thing.maxHp)
+        out_buffer[idx + 19] =
+          case thing.kind
+          of assembler:
+            toCountByte(thing.hearts)
+          of Mine:
+            toCountByte(thing.resources)
+          else:
+            0'u8
+        out_buffer[idx + 20] = toCountByte(thing.cooldown)
+        out_buffer[idx + 21] = toCountByte(thing.frozen)
+
+        var flags = 0'u8
+        if thing.hasClaimedTerritory:
+          flags = flags or 1'u8
+        if thing.lanternHealthy:
+          flags = flags or 2'u8
+        if globalEnv.actionTintCountdown[x][y] > 0:
+          flags = flags or 4'u8
+        out_buffer[idx + 22] = flags
+
+        if thing.kind == Agent:
+          out_buffer[idx + 6] = toCountByte(thing.agentId)
+          out_buffer[idx + 7] = toCountByte(getTeamId(thing.agentId))
+          out_buffer[idx + 10] = toCountByte(thing.inventoryOre)
+          out_buffer[idx + 11] = toCountByte(thing.inventoryBattery)
+          out_buffer[idx + 12] = toCountByte(thing.inventoryWater)
+          out_buffer[idx + 13] = toCountByte(thing.inventoryWheat)
+          out_buffer[idx + 14] = toCountByte(thing.inventoryWood)
+          out_buffer[idx + 15] = toCountByte(thing.inventorySpear)
+          out_buffer[idx + 16] = toCountByte(thing.inventoryLantern)
+          out_buffer[idx + 17] = toCountByte(thing.inventoryArmor)
+          out_buffer[idx + 18] = toCountByte(thing.inventoryBread)
+        elif thing.kind == PlantedLantern:
+          out_buffer[idx + 7] = toCountByte(thing.teamId)
+
+  return 1
 
 proc tribal_village_render_rgb(
   env: pointer,

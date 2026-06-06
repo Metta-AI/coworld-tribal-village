@@ -6,7 +6,7 @@ Players connect to the runner-supplied `COWORLD_PLAYER_WS_URL`, which points at:
 ws://<game-host>:8080/player?slot=<0-47>&token=<runner-token>
 ```
 
-The server sends JSON observations:
+The server sends JSON action observations:
 
 ```json
 {
@@ -28,32 +28,18 @@ The server sends JSON observations:
   },
   "game_config": {
     "seed": 1,
-    "max_steps": 256,
-    "render_scale": 1,
-    "window_radius": 5
-  },
-  "view": {
-    "kind": "rgb_window",
-    "width": 11,
-    "height": 11,
-    "tile_width": 11,
-    "tile_height": 11,
-    "tile_size": 1,
-    "radius": 5,
-    "center": {"x": 10, "y": 10},
-    "data": []
+    "max_steps": 256
   }
 }
 ```
 
-`view.data` is a flat RGB uint8 array in row-major order. It is a rendered
-window centered on the player's current agent, using the same tile/sprite colors
-as the global viewer. Players that want neural observations should derive them
-from this game-facing view in their own player container.
+The visual game stream is not duplicated on `/player`. Browser player pages use
+the same sprite-based `/global` stream as spectators and replays, while `/player`
+is only the slot-authenticated action channel.
 
 The bundled `default-ai-agent` uses `game_config.seed` to run the existing Nim
 role-based scripted AI in a deterministic local mirror, then sends its selected
-slot action back over this same protocol.
+slot action back over this protocol.
 
 Players respond with one action:
 
