@@ -13,7 +13,32 @@ from tribal_village_env.build import ensure_nim_library_current
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
-DEFAULT_WINDOW_RADIUS = 5
+CELL_STRIDE = 24
+TERRAIN_LABELS = ["empty", "water", "bridge", "wheat", "tree", "fertile"]
+THING_LABELS = [
+    "agent",
+    "wall",
+    "mine",
+    "converter",
+    "assembler",
+    "spawner",
+    "tumor",
+    "armory",
+    "forge",
+    "clay_oven",
+    "weaving_loom",
+    "planted_lantern",
+]
+TEAM_COLORS = [
+    "#e86b6b",
+    "#f0a86b",
+    "#f0d56b",
+    "#99d680",
+    "#c763e0",
+    "#6ab8f0",
+    "#dedede",
+    "#ed8fd1",
+]
 
 
 class NimConfig(ctypes.Structure):
@@ -49,14 +74,10 @@ class CoworldTribalVillageEnv:
         self,
         *,
         max_steps: int,
-        render_scale: int = 1,
-        window_radius: int = DEFAULT_WINDOW_RADIUS,
         config: dict[str, Any] | None = None,
     ) -> None:
         ensure_nim_library_current(verbose=False)
         self.max_steps = int(max_steps)
-        self.render_scale = max(1, int(render_scale))
-        self.window_radius = max(1, int(window_radius))
         self.config = config or {}
         self.lib = ctypes.CDLL(str(_library_path()))
         self._setup_ctypes_interface()
@@ -68,12 +89,8 @@ class CoworldTribalVillageEnv:
         self.rewards = np.zeros(self.num_agents, dtype=np.float32)
         self.terminals = np.zeros(self.num_agents, dtype=np.uint8)
         self.truncations = np.zeros(self.num_agents, dtype=np.uint8)
-        self._rgb_frame = np.zeros(
-            (
-                self.map_height * self.render_scale,
-                self.map_width * self.render_scale,
-                3,
-            ),
+        self._world_cells = np.zeros(
+            self.map_width * self.map_height * CELL_STRIDE,
             dtype=np.uint8,
         )
         self.env_ptr = self.lib.tribal_village_create()
@@ -128,13 +145,8 @@ class CoworldTribalVillageEnv:
                 ctypes.c_int32,
             ),
             (
-                "tribal_village_render_rgb",
-                [
-                    ctypes.c_void_p,
-                    ctypes.c_void_p,
-                    ctypes.c_int32,
-                    ctypes.c_int32,
-                ],
+                "tribal_village_export_world_cells",
+                [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32],
                 ctypes.c_int32,
             ),
         ]
@@ -214,64 +226,29 @@ class CoworldTribalVillageEnv:
             raise RuntimeError("Failed to compute Nim built-in AI actions")
         return [int(action) for action in self.actions.tolist()]
 
-    def render_frame(self) -> np.ndarray:
-        ok = self.lib.tribal_village_render_rgb(
+    def world_frame(self) -> tuple[dict[str, Any], bytes]:
+        ok = self.lib.tribal_village_export_world_cells(
             self.env_ptr,
-            self._rgb_frame.ctypes.data_as(ctypes.c_void_p),
-            int(self._rgb_frame.shape[1]),
-            int(self._rgb_frame.shape[0]),
+            self._world_cells.ctypes.data_as(ctypes.c_void_p),
+            int(self._world_cells.size),
         )
         if ok != 1:
-            raise RuntimeError("Failed to render Nim RGB frame")
-        return self._rgb_frame
-
-    def frame_payload(self) -> dict[str, Any]:
-        frame = self.render_frame()
+            raise RuntimeError("Failed to export Nim Coworld cell frame")
         return {
-            "kind": "rgb",
-            "width": int(frame.shape[1]),
-            "height": int(frame.shape[0]),
-            "tile_size": self.render_scale,
-            "data": frame.reshape(-1).tolist(),
-        }
+            "kind": "tribal-village-cells-v1",
+            "encoding": "uint8-arraybuffer",
+            "width": self.map_width,
+            "height": self.map_height,
+            "stride": CELL_STRIDE,
+            "terrain_labels": TERRAIN_LABELS,
+            "thing_labels": THING_LABELS,
+            "team_colors": TEAM_COLORS,
+        }, self._world_cells.tobytes()
 
     def agent_position(self, slot: int) -> tuple[int, int]:
         x = int(self.lib.tribal_village_get_agent_x(self.env_ptr, int(slot)))
         y = int(self.lib.tribal_village_get_agent_y(self.env_ptr, int(slot)))
         return x, y
-
-    def player_view(self, slot: int) -> dict[str, Any]:
-        frame = self.render_frame()
-        center_x, center_y = self.agent_position(slot)
-        tile_size = self.render_scale
-        tiles = self.window_radius * 2 + 1
-        width = tiles * tile_size
-        height = tiles * tile_size
-        out = np.zeros((height, width, 3), dtype=np.uint8)
-        src_x0 = (center_x - self.window_radius) * tile_size
-        src_y0 = (center_y - self.window_radius) * tile_size
-
-        for y in range(height):
-            src_y = src_y0 + y
-            if src_y < 0 or src_y >= frame.shape[0]:
-                continue
-            for x in range(width):
-                src_x = src_x0 + x
-                if src_x < 0 or src_x >= frame.shape[1]:
-                    continue
-                out[y, x] = frame[src_y, src_x]
-
-        return {
-            "kind": "rgb_window",
-            "width": width,
-            "height": height,
-            "tile_width": tiles,
-            "tile_height": tiles,
-            "tile_size": tile_size,
-            "radius": self.window_radius,
-            "center": {"x": center_x, "y": center_y},
-            "data": out.reshape(-1).tolist(),
-        }
 
     def close(self) -> None:
         if getattr(self, "env_ptr", None):

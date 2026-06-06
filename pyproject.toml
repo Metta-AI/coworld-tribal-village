@@ -49,6 +49,7 @@ tribal_village_env = [
   "*.dll",
   "libtribal_village.*",
   "coworld/clients/*.html",
+  "coworld/clients/*.js",
   "coworld/docs/*.md",
 ]
 

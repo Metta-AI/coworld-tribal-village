@@ -14,8 +14,8 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 import uvicorn
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi.responses import FileResponse, HTMLResponse
 
 from tribal_village_env.coworld.direct_env import (
     ACTION_ARGUMENT_COUNT,
@@ -24,7 +24,14 @@ from tribal_village_env.coworld.direct_env import (
     CoworldTribalVillageEnv,
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CLIENT_DIR = Path(__file__).parent / "clients"
+ASSETS_DIR = PROJECT_ROOT / "data"
+ASSET_MEDIA_TYPES = {
+    ".js": "application/javascript",
+    ".png": "image/png",
+    ".ttf": "font/ttf",
+}
 HTTP_USER_AGENT = "coworld-tribal-village/0.1"
 
 CONFIG_ENV_VAR = "COGAME_CONFIG_URI"
@@ -113,8 +120,6 @@ class CoworldConfig:
     max_steps: int
     tick_rate: float
     player_connect_timeout_seconds: float
-    render_scale: int
-    window_radius: int
     seed: int
 
     @classmethod
@@ -143,8 +148,6 @@ class CoworldConfig:
         )
         if connect_timeout < 0:
             raise ValueError("player_connect_timeout_seconds must be non-negative")
-        render_scale = max(1, int(data.get("render_scale", 1)))
-        window_radius = max(1, int(data.get("window_radius", 5)))
         seed = max(1, int(data.get("seed", 1)))
         return cls(
             tokens=tokens,
@@ -152,8 +155,6 @@ class CoworldConfig:
             max_steps=max_steps,
             tick_rate=tick_rate,
             player_connect_timeout_seconds=connect_timeout,
-            render_scale=render_scale,
-            window_radius=window_radius,
             seed=seed,
         )
 
@@ -183,14 +184,10 @@ def _default_players() -> list[dict[str, str]]:
 def _make_env(
     *,
     max_steps: int,
-    render_scale: int = 1,
-    window_radius: int = 5,
     seed: int = 1,
 ) -> CoworldTribalVillageEnv:
     return CoworldTribalVillageEnv(
         max_steps=max_steps,
-        render_scale=render_scale,
-        window_radius=window_radius,
         config={"seed": seed},
     )
 
@@ -208,8 +205,6 @@ class TribalVillageCoworld:
         self.replay_uri = replay_uri
         self.env = _make_env(
             max_steps=config.max_steps,
-            render_scale=config.render_scale,
-            window_radius=config.window_radius,
             seed=config.seed,
         )
         self.env.reset()
@@ -274,7 +269,7 @@ class TribalVillageCoworld:
         await websocket.accept()
         try:
             while True:
-                await websocket.send_json(self.snapshot("state"))
+                await send_world_snapshot(websocket, self.env, self.snapshot("state"))
                 if self.done:
                     break
                 await asyncio.sleep(0.25)
@@ -376,10 +371,7 @@ class TribalVillageCoworld:
             "game_config": {
                 "seed": self.config.seed,
                 "max_steps": self.config.max_steps,
-                "render_scale": self.config.render_scale,
-                "window_radius": self.config.window_radius,
             },
-            "view": self.env.player_view(slot),
         }
 
     def snapshot(self, message_type: str) -> dict[str, Any]:
@@ -393,7 +385,6 @@ class TribalVillageCoworld:
             "team_scores": self.team_scores(),
             "player_names": self.config.player_names,
             "agents": agent_snapshots(self.env, self.config.player_names),
-            "frame": self.env.frame_payload(),
         }
 
     def team_scores(self) -> list[float]:
@@ -417,8 +408,6 @@ class TribalVillageCoworld:
                 "seed": self.config.seed,
                 "max_steps": self.config.max_steps,
                 "tick_rate": self.config.tick_rate,
-                "render_scale": self.config.render_scale,
-                "window_radius": self.config.window_radius,
                 "players": self.config.player_names,
             },
             "ticks": [
@@ -459,8 +448,6 @@ class TribalVillageReplay:
         self.player_names = replay_player_names(config.get("players"))
         self.max_steps = max(1, len(self.actions))
         self.tick_rate = float(config.get("tick_rate", DEFAULT_TICK_RATE))
-        self.render_scale = max(1, int(config.get("render_scale", 1)))
-        self.window_radius = max(1, int(config.get("window_radius", 5)))
         self.seed = max(1, int(config.get("seed", 1)))
         self.results = payload.get("results", {})
 
@@ -468,20 +455,16 @@ class TribalVillageReplay:
         await websocket.accept()
         env = _make_env(
             max_steps=self.max_steps,
-            render_scale=self.render_scale,
-            window_radius=self.window_radius,
             seed=self.seed,
         )
         try:
             env.reset()
             while True:
-                await websocket.send_json(self._snapshot(env))
+                await send_world_snapshot(websocket, env, self._snapshot(env))
                 if env.step_count >= len(self.actions):
                     env.close()
                     env = _make_env(
                         max_steps=self.max_steps,
-                        render_scale=self.render_scale,
-                        window_radius=self.window_radius,
                         seed=self.seed,
                     )
                     env.reset()
@@ -510,7 +493,6 @@ class TribalVillageReplay:
             "team_scores": self.results.get("team_scores", []),
             "player_names": self.player_names,
             "agents": agent_snapshots(env, self.player_names),
-            "frame": env.frame_payload(),
         }
 
 
@@ -578,6 +560,17 @@ def agent_snapshots(
     return agents
 
 
+async def send_world_snapshot(
+    websocket: WebSocket,
+    env: CoworldTribalVillageEnv,
+    message: dict[str, Any],
+) -> None:
+    frame_meta, cell_bytes = env.world_frame()
+    message["frame"] = {**frame_meta, "asset_base": "/assets"}
+    await websocket.send_json(message)
+    await websocket.send_bytes(cell_bytes)
+
+
 def _coerce_action(message: Any) -> int:
     value: Any
     if isinstance(message, dict):
@@ -636,6 +629,14 @@ def _runtime() -> TribalVillageCoworld | TribalVillageReplay:
     return runtime
 
 
+def _resolve_static_path(root: Path, asset_path: str) -> Path:
+    root_path = root.resolve()
+    path = (root / asset_path).resolve()
+    if root_path not in path.parents or not path.is_file():
+        raise HTTPException(status_code=404)
+    return path
+
+
 @app.get("/healthz")
 def healthz() -> dict[str, bool]:
     return {"ok": True}
@@ -654,6 +655,25 @@ def player_client() -> HTMLResponse:
 @app.get("/client/replay")
 def replay_client() -> HTMLResponse:
     return HTMLResponse((CLIENT_DIR / "replay.html").read_text())
+
+
+@app.get("/client/common/{asset_path:path}")
+def common_client_asset(asset_path: str) -> FileResponse:
+    path = _resolve_static_path(CLIENT_DIR, asset_path)
+    return FileResponse(
+        path,
+        media_type=ASSET_MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/assets/{asset_path:path}")
+def sprite_asset(asset_path: str) -> FileResponse:
+    path = _resolve_static_path(ASSETS_DIR, asset_path)
+    return FileResponse(
+        path,
+        media_type=ASSET_MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+    )
 
 
 @app.websocket("/global")

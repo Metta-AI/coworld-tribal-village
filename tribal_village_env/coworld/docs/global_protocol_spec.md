@@ -12,7 +12,8 @@ Replay viewers connect to:
 ws://<game-host>:8080/replay
 ```
 
-Both routes send JSON state snapshots:
+Both routes send one JSON state snapshot followed by one binary cell buffer for
+each rendered frame:
 
 ```json
 {
@@ -28,21 +29,24 @@ Both routes send JSON state snapshots:
     {"slot": 0, "name": "Agent 0", "team": 0, "x": 23, "y": 17}
   ],
   "frame": {
-    "kind": "rgb",
-    "width": 192,
-    "height": 108,
-    "tile_size": 1,
-    "data": []
+    "kind": "tribal-village-cells-v1",
+    "encoding": "uint8-arraybuffer",
+    "width": 196,
+    "height": 112,
+    "stride": 24,
+    "asset_base": "/assets"
   }
 }
 ```
 
-`frame.data` is a flat RGB uint8 array in row-major order. Replay snapshots use
-`"type": "replay"` and loop to tick 0 after the recorded action log ends.
-`agents` gives the current world tile position for each slot so browser clients
-can draw `#slot name` labels above players.
+The binary payload is a row-major `Uint8Array` with `width * height * stride`
+bytes. Each 24-byte cell contains terrain, tile tint, object kind, orientation,
+agent/team ids, health, inventory counts, building counts, cooldown/frozen
+state, and flags. Browser clients render the real sprite map by loading assets
+from `/assets/...` and shared code from `/client/common/view_common.js`.
 
-The replay artifact uses the compact `tribal-village-replay-v2` schema:
+Replay snapshots use `"type": "replay"` and loop to tick 0 after the recorded
+action log ends. Replay artifacts store actions only:
 
 ```json
 {
@@ -51,15 +55,9 @@ The replay artifact uses the compact `tribal-village-replay-v2` schema:
     "seed": 1,
     "max_steps": 256,
     "tick_rate": 20,
-    "render_scale": 1,
-    "window_radius": 5,
     "players": ["Agent 0"]
   },
   "ticks": [{"a": "base64-encoded 48 action bytes"}],
   "results": {}
 }
 ```
-
-The initial seed/config reconstructs the map and deterministic tumor/spawner
-updates. Each tick stores only the 48 player action bytes; no rendered frames are
-stored in the replay artifact.

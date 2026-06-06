@@ -3,104 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Tribal Village</title>
   <style>
-    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    body { margin: 0; background: #101412; color: #e7ece4; }
-    main { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
-    header { display: flex; gap: 18px; align-items: center; padding: 10px 14px; border-bottom: 1px solid #2b332e; }
-    h1 { margin: 0; font-size: 16px; font-weight: 700; }
-    .stat { color: #b8c7bb; font-size: 13px; }
-    canvas { width: 100%; height: calc(100vh - 43px); image-rendering: pixelated; display: block; background: #1c211c; }
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #080b0a; color: #eef2ee; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; overflow: hidden; background: #080b0a; }
+    main { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+    #world { display: block; width: 100%; height: 100%; cursor: grab; background: #080b0a; }
+    #world.dragging { cursor: grabbing; }
+    .badge, .minimap-panel, .tile-panel { position: absolute; z-index: 3; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
+    .top-status { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; gap: 6px; align-items: start; width: calc(100vw - 24px); pointer-events: none; }
+    .badge { display: flex; flex: 0 0 auto; gap: 6px; align-items: center; min-height: 42px; padding: 6px 8px; color: #dce5e0; font-size: 12px; }
+    .badge strong { color: #fff3bf; font-size: 12px; }
+    .badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-panel { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 7px; min-width: 150px; max-width: 440px; max-height: 58px; padding: 6px 8px; overflow: hidden; pointer-events: none; }
+    .tile-panel[hidden] { display: none; }
+    .tile-panel strong { color: #fff3bf; font-size: 12px; white-space: nowrap; }
+    .tile-panel span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c5bf; font-size: 11px; }
+    .minimap-panel { left: 12px; bottom: 12px; width: clamp(180px, 24vw, 250px); padding: 6px; }
+    #minimap { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #050706; border: 1px solid rgba(238, 242, 238, .2); }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <h1>Tribal Village</h1>
-      <div class="stat" id="tick">tick 0</div>
-      <div class="stat" id="scores"></div>
-    </header>
-    <canvas id="world" width="192" height="108"></canvas>
+    <canvas id="world"></canvas>
+    <div class="top-status">
+      <div class="badge"><strong>Tribal Village</strong><span id="status">connecting</span></div>
+      <section class="tile-panel" id="tilePanel" hidden>
+        <strong data-coords>-</strong>
+        <span data-body></span>
+      </section>
+    </div>
+    <section class="minimap-panel">
+      <canvas id="minimap" width="256" height="144"></canvas>
+    </section>
   </main>
+  <script src="/client/common/view_common.js"></script>
   <script>
-    const canvas = document.getElementById("world");
-    const ctx = canvas.getContext("2d");
-    const buffer = document.createElement("canvas");
-    const bufferCtx = buffer.getContext("2d");
-    const tick = document.getElementById("tick");
-    const scores = document.getElementById("scores");
-    const drawScale = 4;
-    const teamColors = ["#f87171", "#60a5fa", "#34d399", "#fbbf24", "#c084fc", "#2dd4bf", "#fb923c", "#f472b6"];
-
-    function drawFrame(frame) {
-      if (!frame || frame.kind !== "rgb") return;
-      if (buffer.width !== frame.width || buffer.height !== frame.height) {
-        buffer.width = frame.width;
-        buffer.height = frame.height;
+    const statusEl = document.getElementById("status");
+    const renderer = new TribalVillageView.WorldRenderer(
+      document.getElementById("world"),
+      {
+        minimap: document.getElementById("minimap"),
+        tilePanel: document.getElementById("tilePanel"),
       }
-      const targetWidth = frame.width * drawScale;
-      const targetHeight = frame.height * drawScale;
-      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-      }
-      const pixels = new Uint8ClampedArray(frame.width * frame.height * 4);
-      for (let i = 0, j = 0; i < frame.data.length; i += 3, j += 4) {
-        pixels[j] = frame.data[i];
-        pixels[j + 1] = frame.data[i + 1];
-        pixels[j + 2] = frame.data[i + 2];
-        pixels[j + 3] = 255;
-      }
-      bufferCtx.putImageData(new ImageData(pixels, frame.width, frame.height), 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(buffer, 0, 0, canvas.width, canvas.height);
-    }
-
-    function drawLabels(message) {
-      const frame = message.frame;
-      const agents = Array.isArray(message.agents) ? message.agents : [];
-      if (!frame || agents.length === 0) return;
-      const tile = Number(frame.tile_size || 1) * drawScale;
-      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.textBaseline = "bottom";
-      for (const agent of agents.slice().sort((a, b) => Number(a.y || 0) - Number(b.y || 0))) {
-        const slot = Number(agent.slot || 0);
-        const team = Number(agent.team || 0);
-        const label = `#${slot} ${agent.name || `Agent ${slot}`}`;
-        const textWidth = ctx.measureText(label).width;
-        const x = Math.max(textWidth / 2 + 2, Math.min(canvas.width - textWidth / 2 - 2, (Number(agent.x || 0) + 0.5) * tile));
-        const y = Math.max(12, Number(agent.y || 0) * tile - 2);
-        ctx.fillStyle = "rgba(8, 12, 10, 0.76)";
-        ctx.fillRect(Math.round(x - textWidth / 2 - 2), Math.round(y - 11), Math.ceil(textWidth + 4), 12);
-        ctx.fillStyle = teamColors[team % teamColors.length];
-        ctx.fillText(label, Math.round(x - textWidth / 2), Math.round(y));
-      }
-    }
-
-    const pageUrl = new URL(window.location.href);
-
-    function websocketAddress(path) {
-      const address = pageUrl.searchParams.get("address");
-      const target = new URL(address || window.location.href, window.location.href);
-      if (target.protocol === "http:") target.protocol = "ws:";
-      if (target.protocol === "https:") target.protocol = "wss:";
-      if (!address) target.pathname = target.pathname.replace(/\/client\/global$/, path);
-      target.hash = "";
-      return target.toString();
-    }
-
-    const ws = new WebSocket(websocketAddress("/global"));
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      tick.textContent = `tick ${message.tick}/${message.max_steps}`;
-      if (message.team_scores) {
-        scores.textContent = message.team_scores.map((v, i) => `T${i}:${v.toFixed(1)}`).join(" ");
-      }
-      drawFrame(message.frame);
-      drawLabels(message);
-    };
+    );
+    const ws = new WebSocket(TribalVillageView.websocketAddress(/\/client\/global$/, "/global"));
+    TribalVillageView.attachWorldSocket(ws, renderer, (message) => {
+      const teams = Array.isArray(message.team_scores)
+        ? message.team_scores.map((v, i) => `T${i}:${Number(v).toFixed(1)}`).join(" ")
+        : "";
+      statusEl.textContent = `tick ${message.tick}/${message.max_steps} ${teams}`;
+    });
+    ws.onopen = () => { statusEl.textContent = "connected"; };
+    ws.onclose = () => { statusEl.textContent = "closed"; };
   </script>
 </body>
 </html>
