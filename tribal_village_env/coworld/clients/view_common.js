@@ -117,6 +117,14 @@ const TribalVillageView = (() => {
   tintCanvas.height = TILE;
   const tintCtx = tintCanvas.getContext("2d");
 
+  function routedHttpAddress(clientPath, routePath) {
+    const target = new URL(window.location.href);
+    target.pathname = target.pathname.replace(clientPath, routePath);
+    target.search = "";
+    target.hash = "";
+    return target.toString().replace(/\/$/, "");
+  }
+
   function websocketAddress(clientPath, socketPath) {
     const pageUrl = new URL(window.location.href);
     const address = pageUrl.searchParams.get("address");
@@ -126,6 +134,13 @@ const TribalVillageView = (() => {
     if (!address) target.pathname = target.pathname.replace(clientPath, socketPath);
     target.hash = "";
     return target.toString();
+  }
+
+  function assetBaseAddress(assetBase) {
+    if (!assetBase || assetBase.startsWith("/")) {
+      return routedHttpAddress(/\/client\/(?:global|player|replay)(?:\/.*)?$/, assetBase || "/assets");
+    }
+    return new URL(assetBase, window.location.href).toString().replace(/\/$/, "");
   }
 
   function playerSocketAddress() {
@@ -278,7 +293,7 @@ const TribalVillageView = (() => {
       this.message = message;
       this.frame = message.frame;
       this.cells = new Uint8Array(buffer);
-      void this.ensureAssets(this.frame.asset_base || "/assets");
+      void this.ensureAssets(assetBaseAddress(this.frame.asset_base));
       this.resizeCanvas();
       if (!this.hasFit) this.fitWorld();
       this.centerFollowedAgent();
@@ -632,6 +647,8 @@ const TribalVillageView = (() => {
   return {
     WorldRenderer,
     attachWorldSocket,
+    assetBaseAddress,
+    routedHttpAddress,
     websocketAddress,
     playerSocketAddress,
   };

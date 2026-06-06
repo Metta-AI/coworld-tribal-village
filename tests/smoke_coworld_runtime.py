@@ -162,12 +162,15 @@ def assert_client_websockets_are_proxy_relative() -> None:
         "replay.html": "/replay",
     }.items():
         html = (client_dir / client).read_text()
-        assert "/client/common/view_common.js" in html
+        assert './common/view_common.js' in html
+        assert 'src="/client/' not in html
         assert "rgb_window" not in html
         assert 'kind !== "rgb"' not in html
         assert f"${{location.host}}{websocket_path}" not in html
     common_js = (client_dir / "view_common.js").read_text()
+    assert "function routedHttpAddress" in common_js
     assert "function websocketAddress" in common_js
+    assert "function assetBaseAddress" in common_js
     assert "new URL(address || window.location.href, window.location.href)" in common_js
     assert "drawFrame(frame)" not in common_js
 
