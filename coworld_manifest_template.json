@@ -53,7 +53,7 @@
           "description": "Seconds to wait for players before starting with no-op actions for missing slots.",
           "type": "number",
           "minimum": 0,
-          "default": 10
+          "default": 180
         },
         "seed": {
           "description": "Deterministic episode seed used for map generation, replay, and bundled scripted AI mirrors.",
@@ -159,7 +159,7 @@
       "game_config": {
         "max_steps": 128,
         "tick_rate": 20,
-        "player_connect_timeout_seconds": 10,
+        "player_connect_timeout_seconds": 180,
         "seed": 1,
         "players": [
           {"name": "Agent 0"},
@@ -218,7 +218,7 @@
     "game_config": {
       "max_steps": 64,
       "tick_rate": 20,
-      "player_connect_timeout_seconds": 10,
+      "player_connect_timeout_seconds": 180,
       "seed": 1,
       "players": [
         {"name": "Agent 0"},
