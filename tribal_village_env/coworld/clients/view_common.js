@@ -3,6 +3,7 @@
 const TribalVillageView = (() => {
   const TILE = 16;
   const NO_THING = 255;
+  const SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1";
   const OFF = {
     terrain: 0,
     r: 1,
@@ -292,6 +293,13 @@ const TribalVillageView = (() => {
     setFrame(message, buffer) {
       this.message = message;
       this.frame = message.frame;
+      if (!this.frame || this.frame.kind !== SPRITE_FRAME_KIND) {
+        throw new Error(`unsupported Tribal Village sprite frame kind: ${this.frame?.kind}`);
+      }
+      const expectedBytes = this.frame.width * this.frame.height * this.frame.stride;
+      if (buffer.byteLength !== expectedBytes) {
+        throw new Error(`sprite frame byte length ${buffer.byteLength} does not match ${expectedBytes}`);
+      }
       this.cells = new Uint8Array(buffer);
       void this.ensureAssets(assetBaseAddress(this.frame.asset_base));
       this.resizeCanvas();
@@ -645,6 +653,7 @@ const TribalVillageView = (() => {
   }
 
   return {
+    SPRITE_FRAME_KIND,
     WorldRenderer,
     attachWorldSocket,
     assetBaseAddress,

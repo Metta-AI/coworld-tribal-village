@@ -13,6 +13,7 @@ from tribal_village_env.build import ensure_nim_library_current
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
+COWORLD_SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1"
 CELL_STRIDE = 24
 TERRAIN_LABELS = ["empty", "water", "bridge", "wheat", "tree", "fertile"]
 THING_LABELS = [
@@ -66,8 +67,8 @@ class CoworldTribalVillageEnv:
     """Small ctypes wrapper for Coworld runtime.
 
     This avoids importing the PufferLib/Gymnasium training wrapper in the game
-    server image. Coworld players receive rendered sprite windows and can choose
-    their own training stack outside the game container.
+    server image. Coworld visuals use the native full-map sprite-cell export;
+    Coworld players receive action observations on a separate route.
     """
 
     def __init__(
@@ -226,7 +227,7 @@ class CoworldTribalVillageEnv:
             raise RuntimeError("Failed to compute Nim built-in AI actions")
         return [int(action) for action in self.actions.tolist()]
 
-    def world_frame(self) -> tuple[dict[str, Any], bytes]:
+    def sprite_frame(self) -> tuple[dict[str, Any], bytes]:
         ok = self.lib.tribal_village_export_world_cells(
             self.env_ptr,
             self._world_cells.ctypes.data_as(ctypes.c_void_p),
@@ -235,7 +236,7 @@ class CoworldTribalVillageEnv:
         if ok != 1:
             raise RuntimeError("Failed to export Nim Coworld cell frame")
         return {
-            "kind": "tribal-village-cells-v1",
+            "kind": COWORLD_SPRITE_FRAME_KIND,
             "encoding": "uint8-arraybuffer",
             "width": self.map_width,
             "height": self.map_height,
