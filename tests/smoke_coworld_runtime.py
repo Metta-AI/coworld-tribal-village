@@ -173,6 +173,9 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "function assetBaseAddress" in common_js
     assert "new URL(address || window.location.href, window.location.href)" in common_js
     assert "drawFrame(frame)" not in common_js
+    player_html = (client_dir / "player.html").read_text()
+    assert 'worldAddress.pathname.replace(/\\/player$/, "/global")' in player_html
+    assert "worldAddress.search = \"\"" in player_html
 
 
 def assert_static_clients_are_served(port: int) -> None:
