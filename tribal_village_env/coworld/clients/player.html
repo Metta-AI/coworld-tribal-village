@@ -90,7 +90,10 @@
     const directions = ["N", "S", "W", "E", "NW", "NE", "SW", "SE"];
     let actionSocket = null;
 
-    const worldSocket = new WebSocket(TribalVillageView.websocketAddress(/\/client\/player$/, "/global"));
+    const worldAddress = new URL(TribalVillageView.websocketAddress(/\/client\/player$/, "/global"));
+    worldAddress.pathname = worldAddress.pathname.replace(/\/player$/, "/global");
+    worldAddress.search = "";
+    const worldSocket = new WebSocket(worldAddress.toString());
     TribalVillageView.attachWorldSocket(worldSocket, renderer, (message) => {
       statusEl.textContent = `world tick ${message.tick}/${message.max_steps}`;
     });
