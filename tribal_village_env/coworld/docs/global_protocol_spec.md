@@ -56,7 +56,7 @@ action log ends. Replay artifacts store actions only:
   "initial": {
     "seed": 1,
     "max_steps": 256,
-    "tick_rate": 20,
+    "tick_rate": 5,
     "players": ["Agent 0"]
   },
   "ticks": [{"a": "base64-encoded 48 action bytes"}],

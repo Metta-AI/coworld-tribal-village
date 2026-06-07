@@ -46,10 +46,13 @@ PLAYER_COUNT = 48
 TEAM_COUNT = 8
 AGENTS_PER_TEAM = 6
 DEFAULT_MAX_STEPS = 256
-DEFAULT_TICK_RATE = 20.0
+DEFAULT_TICK_RATE = 5.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 180.0
 REPLAY_SCHEMA_V1 = "tribal-village-replay-v1"
 REPLAY_SCHEMA_V2 = "tribal-village-replay-v2"
+MIN_REPLAY_SPEED = 0.25
+MAX_REPLAY_SPEED = 8.0
+DEFAULT_REPLAY_SPEED = 1.0
 
 
 def read_data(uri: str) -> bytes:
@@ -453,7 +456,11 @@ class TribalVillageReplay:
         self.results = payload.get("results", {})
 
     async def stream(self, websocket: WebSocket) -> None:
+        playback = ReplayPlayback(
+            speed=replay_speed(websocket.query_params.get("speed"))
+        )
         await websocket.accept()
+        control_task = asyncio.create_task(self.receive_controls(websocket, playback))
         env = _make_env(
             max_steps=self.max_steps,
             seed=self.seed,
@@ -477,10 +484,14 @@ class TribalVillageReplay:
                     for slot in range(PLAYER_COUNT)
                 ]
                 env.step(replay_actions)
-                await asyncio.sleep(1.0 / max(1.0, self.tick_rate))
+                await asyncio.sleep(1.0 / (self.tick_rate * playback.speed))
         except Exception:
             return
         finally:
+            if not control_task.done():
+                control_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await control_task
             env.close()
 
     def _snapshot(self, env: CoworldTribalVillageEnv) -> dict[str, Any]:
@@ -495,6 +506,26 @@ class TribalVillageReplay:
             "player_names": self.player_names,
             "agents": agent_snapshots(env, self.player_names),
         }
+
+    async def receive_controls(
+        self,
+        websocket: WebSocket,
+        playback: "ReplayPlayback",
+    ) -> None:
+        async for raw_message in websocket.iter_text():
+            message = json.loads(raw_message)
+            if message["type"] == "speed":
+                playback.speed = replay_speed(message["speed"])
+
+
+@dataclass
+class ReplayPlayback:
+    speed: float
+
+
+def replay_speed(value: Any) -> float:
+    speed = DEFAULT_REPLAY_SPEED if value is None or value == "" else float(value)
+    return max(MIN_REPLAY_SPEED, min(MAX_REPLAY_SPEED, speed))
 
 
 def replay_player_names(value: Any) -> list[str]:

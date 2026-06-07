@@ -100,7 +100,7 @@ async def assert_live_websockets(port: int) -> None:
 
 async def assert_replay_autoplays_and_loops(port: int) -> None:
     async with websockets.connect(
-        f"ws://127.0.0.1:{port}/replay",
+        f"ws://127.0.0.1:{port}/replay?speed=8",
         open_timeout=5,
         max_size=None,
     ) as replay_ws:
@@ -108,6 +108,8 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
         seen_loop = False
         for _ in range(12):
             message, cell_bytes = await recv_world_frame(replay_ws)
+            if message["tick"] == 1:
+                await replay_ws.send(json.dumps({"type": "speed", "speed": 4}))
             assert message["type"] == "replay"
             assert message["started"] is True
             assert message["frame"]["kind"] == SPRITE_FRAME_KIND
@@ -195,6 +197,13 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert 'id="status"' not in replay_html
     assert 'class="top-status"' not in replay_html
     assert "tilePanel" not in replay_html
+    assert 'data-speed="slower"' in replay_html
+    assert 'data-speed="faster"' in replay_html
+    assert 'type: "speed"' in replay_html
+    assert "keydown" in replay_html
+    manifest = json.loads((ROOT / "coworld_manifest_template.json").read_text())
+    assert manifest["variants"][0]["game_config"]["tick_rate"] == 5
+    assert manifest["certification"]["game_config"]["tick_rate"] == 5
 
 
 def assert_static_clients_are_served(port: int) -> None:
@@ -226,7 +235,7 @@ def main() -> None:
                         {"name": f"Agent {slot}"} for slot in range(PLAYER_COUNT)
                     ],
                     "max_steps": 4,
-                    "tick_rate": 20,
+                    "tick_rate": 5,
                     "player_connect_timeout_seconds": 1,
                     "seed": 1,
                 }
