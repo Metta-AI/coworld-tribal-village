@@ -1,7 +1,6 @@
 "use strict";
 
 const TribalVillageView = (() => {
-  const TILE = 16;
   const MIN_TILE_SCALE = 1;
   const MAX_TILE_SCALE = 48;
   const NO_THING = 255;
@@ -115,10 +114,7 @@ const TribalVillageView = (() => {
       "fill",
     ].map((suffix) => suffix ? `objects/wall.${suffix}` : "objects/wall"),
   ];
-  const tintCanvas = document.createElement("canvas");
-  tintCanvas.width = TILE;
-  tintCanvas.height = TILE;
-  const tintCtx = tintCanvas.getContext("2d");
+  const tintedSprites = new Map();
 
   function routedHttpAddress(clientPath, routePath) {
     const target = new URL(window.location.href);
@@ -203,16 +199,28 @@ const TribalVillageView = (() => {
       ctx.fillRect(x + 0.1, y + 0.1, 0.8, 0.8);
       return;
     }
-    tintCtx.clearRect(0, 0, TILE, TILE);
-    tintCtx.globalCompositeOperation = "source-over";
-    tintCtx.drawImage(image, 0, 0, TILE, TILE);
-    tintCtx.globalCompositeOperation = "source-atop";
-    tintCtx.fillStyle = color;
-    tintCtx.fillRect(0, 0, TILE, TILE);
-    tintCtx.globalCompositeOperation = "source-over";
+    const key = `${image.src}|${color}`;
+    let tinted = tintedSprites.get(key);
+    if (!tinted) {
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      tinted = document.createElement("canvas");
+      tinted.width = width;
+      tinted.height = height;
+      const tintCtx = tinted.getContext("2d");
+      tintCtx.imageSmoothingEnabled = false;
+      tintCtx.drawImage(image, 0, 0, width, height);
+      tintCtx.globalCompositeOperation = "multiply";
+      tintCtx.fillStyle = color;
+      tintCtx.fillRect(0, 0, width, height);
+      tintCtx.globalCompositeOperation = "destination-in";
+      tintCtx.drawImage(image, 0, 0, width, height);
+      tintCtx.globalCompositeOperation = "source-over";
+      tintedSprites.set(key, tinted);
+    }
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.drawImage(tintCanvas, x, y, 1, 1);
+    ctx.drawImage(tinted, x, y, 1, 1);
     ctx.restore();
   }
 
@@ -497,9 +505,7 @@ const TribalVillageView = (() => {
     }
 
     drawAssembler(ctx, x, y, idx) {
-      const nearest = this.nearestAgentTeam(x, y);
-      const color = this.teamColor(nearest);
-      drawTintedSprite(ctx, this.assets["objects/altar"], x, y, color);
+      drawTintedSprite(ctx, this.assets["objects/altar"], x, y, cssRgb(this.cells, idx));
       const hearts = this.cells[idx + OFF.count];
       for (let i = 0; i < Math.min(hearts, 5); i += 1) {
         const heart = this.assets["ui/heart"];
@@ -507,19 +513,25 @@ const TribalVillageView = (() => {
       }
     }
 
-    nearestAgentTeam(x, y) {
-      let bestTeam = 0;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      for (const agent of this.message.agents || []) {
-        const dx = Number(agent.x) - x;
-        const dy = Number(agent.y) - y;
-        const distance = dx * dx + dy * dy;
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestTeam = Number(agent.team || 0);
+    liveAgents() {
+      const agents = [];
+      if (!this.frame || !this.cells) return agents;
+      for (let y = 0; y < this.frame.height; y += 1) {
+        for (let x = 0; x < this.frame.width; x += 1) {
+          const idx = this.cellIndex(x, y);
+          if (this.cells[idx + OFF.thing] !== THING.agent) continue;
+          const slot = this.cells[idx + OFF.agentId];
+          const names = this.message.player_names || [];
+          agents.push({
+            slot,
+            name: names[slot] || `Agent ${slot}`,
+            team: this.cells[idx + OFF.teamId],
+            x,
+            y,
+          });
         }
       }
-      return bestTeam;
+      return agents;
     }
 
     drawTumor(ctx, x, y, idx) {
@@ -558,10 +570,10 @@ const TribalVillageView = (() => {
     }
 
     drawLabels(ctx) {
-      if (!Array.isArray(this.message.agents) || this.tileScale < 5) return;
+      if (this.tileScale < 5) return;
       ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.textBaseline = "bottom";
-      for (const agent of this.message.agents) {
+      for (const agent of this.liveAgents()) {
         const slot = Number(agent.slot || 0);
         const team = Number(agent.team || 0);
         const label = `#${slot} ${agent.name || `Agent ${slot}`}`;
@@ -592,7 +604,7 @@ const TribalVillageView = (() => {
           ctx.fillRect(x * sx, y * sy, Math.ceil(sx), Math.ceil(sy));
         }
       }
-      for (const agent of this.message.agents || []) {
+      for (const agent of this.liveAgents()) {
         ctx.fillStyle = this.teamColor(Number(agent.team || 0));
         ctx.fillRect(Number(agent.x) * sx - 1, Number(agent.y) * sy - 1, 3, 3);
       }
