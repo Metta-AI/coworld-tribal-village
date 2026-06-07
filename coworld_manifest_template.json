@@ -158,7 +158,7 @@
       "description": "Short 48-agent Tribal Village Coworld episode.",
       "game_config": {
         "max_steps": 128,
-        "tick_rate": 20,
+        "tick_rate": 5,
         "player_connect_timeout_seconds": 180,
         "seed": 1,
         "players": [
@@ -217,7 +217,7 @@
   "certification": {
     "game_config": {
       "max_steps": 64,
-      "tick_rate": 20,
+      "tick_rate": 5,
       "player_connect_timeout_seconds": 180,
       "seed": 1,
       "players": [

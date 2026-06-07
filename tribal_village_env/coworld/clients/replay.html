@@ -15,6 +15,10 @@
     #world.dragging { cursor: grabbing; }
     .minimap-panel { position: absolute; z-index: 3; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
     .minimap-panel { left: 12px; bottom: 12px; width: clamp(180px, 24vw, 250px); padding: 6px; }
+    .replay-controls { position: absolute; right: 12px; bottom: 12px; z-index: 3; display: flex; gap: 6px; align-items: center; padding: 6px; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
+    .replay-controls button { width: 32px; height: 32px; border: 1px solid rgba(225, 235, 229, .22); background: rgba(20, 28, 25, .94); color: #eef2ee; font: 16px/1 ui-sans-serif, system-ui, sans-serif; }
+    .replay-controls button:hover { border-color: rgba(255, 226, 151, .72); }
+    .replay-controls output { min-width: 34px; color: #fff3bf; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
     #minimap { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #050706; border: 1px solid rgba(238, 242, 238, .2); }
   </style>
 </head>
@@ -23,6 +27,11 @@
     <canvas id="world"></canvas>
     <section class="minimap-panel">
       <canvas id="minimap" width="256" height="144"></canvas>
+    </section>
+    <section class="replay-controls" aria-label="Replay controls">
+      <button type="button" data-speed="slower" title="Slower" aria-label="Slower">-</button>
+      <output id="speed">1x</output>
+      <button type="button" data-speed="faster" title="Faster" aria-label="Faster">+</button>
     </section>
   </main>
   <script src="./common/view_common.js"></script>
@@ -33,7 +42,37 @@
         minimap: document.getElementById("minimap"),
       }
     );
-    const ws = new WebSocket(TribalVillageView.websocketAddress(/\/client\/replay(\/.*)?$/, "/replay"));
+    const speedSteps = [0.25, 0.5, 1, 2, 4, 8];
+    let speedIndex = 2;
+    const speedEl = document.getElementById("speed");
+
+    function speedValue() {
+      return speedSteps[speedIndex];
+    }
+
+    function updateSpeed(index) {
+      speedIndex = Math.max(0, Math.min(speedSteps.length - 1, index));
+      const speed = speedValue();
+      speedEl.textContent = `${speed}x`;
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({type: "speed", speed}));
+      }
+    }
+
+    function replaySocketAddress() {
+      const address = new URL(TribalVillageView.websocketAddress(/\/client\/replay(\/.*)?$/, "/replay"));
+      address.searchParams.set("speed", String(speedValue()));
+      return address.toString();
+    }
+
+    document.querySelector("[data-speed='slower']").onclick = () => updateSpeed(speedIndex - 1);
+    document.querySelector("[data-speed='faster']").onclick = () => updateSpeed(speedIndex + 1);
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "-" || event.key === "_") updateSpeed(speedIndex - 1);
+      if (event.key === "[" || event.key === "=" || event.key === "+" || event.key === "]") updateSpeed(speedIndex + 1);
+    });
+
+    const ws = new WebSocket(replaySocketAddress());
     TribalVillageView.attachWorldSocket(ws, renderer);
   </script>
 </body>

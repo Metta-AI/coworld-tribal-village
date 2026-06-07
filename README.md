@@ -54,9 +54,9 @@ The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `
 `0..63`. The bundled `default-ai-agent` player uses the existing Nim role-based scripted AI in a deterministic local
 mirror and still communicates through the normal `/player` WebSocket route.
 
-Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay` autoplays, loops back to tick 0, and
-draws `#slot name` labels above agents. Replay artifacts are compact JSON: an initial seed/config plus base64-encoded
-per-tick action deltas, not rendered frame dumps.
+Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay` autoplays, loops back to tick 0,
+draws `#slot name` labels above agents, and supports the standard faster/slower controls. Replay artifacts are compact
+JSON: an initial seed/config plus base64-encoded per-tick action deltas, not rendered frame dumps.
 
 When docs, commands, runtime behavior, logs, or replays disagree while you are
 building or submitting a Tribal Village policy, preserve the evidence and file

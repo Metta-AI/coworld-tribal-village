@@ -8,8 +8,8 @@ Player containers should connect to the exact `COWORLD_PLAYER_WS_URL` supplied b
 shaped as `{ "type": "action", "action": 0 }`. The packaged `default-ai-agent` player uses the same image and
 WebSocket route as tournament players.
 
-Replay mode autoplays, loops, and draws `#slot name` labels above agents. Replay artifacts store only the deterministic
-initial config plus compact per-tick action deltas.
+Replay mode autoplays, loops, draws `#slot name` labels above agents, and supports the standard faster/slower controls.
+Replay artifacts store only the deterministic initial config plus compact per-tick action deltas.
 
 When docs, commands, runtime behavior, logs, or replays disagree, preserve the evidence and file an issue in the
 Coworld repo: https://github.com/Metta-AI/coworld/issues. Include the command, league/Coworld ids, logs or replay links,
