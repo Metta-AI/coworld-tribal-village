@@ -172,6 +172,8 @@ def assert_client_websockets_are_proxy_relative() -> None:
         assert f"${{location.host}}{websocket_path}" not in html
     common_js = (client_dir / "view_common.js").read_text()
     assert f'const SPRITE_FRAME_KIND = "{SPRITE_FRAME_KIND}"' in common_js
+    assert "const MIN_TILE_SCALE = 1" in common_js
+    assert "strokeRect(rectX + 1, rectY + 1" in common_js
     assert "function routedHttpAddress" in common_js
     assert "function websocketAddress" in common_js
     assert "function assetBaseAddress" in common_js
@@ -180,6 +182,10 @@ def assert_client_websockets_are_proxy_relative() -> None:
     player_html = (client_dir / "player.html").read_text()
     assert 'worldAddress.pathname.replace(/\\/player$/, "/global")' in player_html
     assert "worldAddress.search = \"\"" in player_html
+    replay_html = (client_dir / "replay.html").read_text()
+    assert "Tribal Village Replay</strong>" not in replay_html
+    assert 'id="status"' not in replay_html
+    assert 'class="top-status"' not in replay_html
 
 
 def assert_static_clients_are_served(port: int) -> None:

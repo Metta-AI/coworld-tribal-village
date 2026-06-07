@@ -2,6 +2,8 @@
 
 const TribalVillageView = (() => {
   const TILE = 16;
+  const MIN_TILE_SCALE = 1;
+  const MAX_TILE_SCALE = 48;
   const NO_THING = 255;
   const SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1";
   const OFF = {
@@ -250,7 +252,7 @@ const TribalVillageView = (() => {
         event.preventDefault();
         const before = this.screenToWorld(event.offsetX, event.offsetY);
         const factor = event.deltaY < 0 ? 1.16 : 0.86;
-        this.tileScale = clamp(this.tileScale * factor, 3, 48);
+        this.tileScale = clamp(this.tileScale * factor, MIN_TILE_SCALE, MAX_TILE_SCALE);
         const after = this.screenToWorld(event.offsetX, event.offsetY);
         this.offsetX += (after.x - before.x) * this.tileScale;
         this.offsetY += (after.y - before.y) * this.tileScale;
@@ -286,7 +288,6 @@ const TribalVillageView = (() => {
 
     setFollowSlot(slot) {
       this.followSlot = slot;
-      this.centerFollowedAgent();
       this.draw();
     }
 
@@ -304,7 +305,6 @@ const TribalVillageView = (() => {
       void this.ensureAssets(assetBaseAddress(this.frame.asset_base));
       this.resizeCanvas();
       if (!this.hasFit) this.fitWorld();
-      this.centerFollowedAgent();
       this.draw();
     }
 
@@ -330,19 +330,10 @@ const TribalVillageView = (() => {
     fitWorld() {
       if (!this.frame) return;
       const size = this.cssSize();
-      this.tileScale = Math.max(3, Math.min(size.width / this.frame.width, size.height / this.frame.height));
+      this.tileScale = Math.max(MIN_TILE_SCALE, Math.min(size.width / this.frame.width, size.height / this.frame.height));
       this.offsetX = (size.width - this.frame.width * this.tileScale) / 2;
       this.offsetY = (size.height - this.frame.height * this.tileScale) / 2;
       this.hasFit = true;
-    }
-
-    centerFollowedAgent() {
-      if (this.followSlot === null || !this.message) return;
-      const agent = (this.message.agents || []).find((item) => Number(item.slot) === this.followSlot);
-      if (!agent) return;
-      const size = this.cssSize();
-      this.offsetX = size.width / 2 - (Number(agent.x) + 0.5) * this.tileScale;
-      this.offsetY = size.height / 2 - (Number(agent.y) + 0.5) * this.tileScale;
     }
 
     screenToWorld(screenX, screenY) {
@@ -610,6 +601,20 @@ const TribalVillageView = (() => {
         ctx.fillStyle = this.teamColor(Number(agent.team || 0));
         ctx.fillRect(Number(agent.x) * sx - 1, Number(agent.y) * sy - 1, 3, 3);
       }
+      const size = this.cssSize();
+      const left = clamp(-this.offsetX / this.tileScale, 0, this.frame.width);
+      const top = clamp(-this.offsetY / this.tileScale, 0, this.frame.height);
+      const right = clamp((size.width - this.offsetX) / this.tileScale, 0, this.frame.width);
+      const bottom = clamp((size.height - this.offsetY) / this.tileScale, 0, this.frame.height);
+      const rectX = left * sx;
+      const rectY = top * sy;
+      const rectW = Math.max(2, (right - left) * sx);
+      const rectH = Math.max(2, (bottom - top) * sy);
+      ctx.fillStyle = "rgba(255, 243, 191, .10)";
+      ctx.strokeStyle = "rgba(255, 243, 191, .95)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(rectX, rectY, rectW, rectH);
+      ctx.strokeRect(rectX + 1, rectY + 1, Math.max(1, rectW - 2), Math.max(1, rectH - 2));
     }
 
     updateTilePanel() {
