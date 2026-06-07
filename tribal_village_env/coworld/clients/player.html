@@ -15,15 +15,11 @@
     #world.dragging { cursor: grabbing; }
     button, select { min-height: 32px; border: 1px solid rgba(225, 235, 229, .22); background: rgba(20, 28, 25, .94); color: #eef2ee; font: inherit; }
     button:hover, select:hover { border-color: rgba(255, 226, 151, .72); }
-    .badge, .control-panel, .minimap-panel, .tile-panel { position: absolute; z-index: 3; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
+    .badge, .control-panel, .minimap-panel { position: absolute; z-index: 3; border: 1px solid rgba(238, 242, 238, .22); background: rgba(7, 10, 9, .86); box-shadow: 0 12px 36px rgba(0, 0, 0, .28); backdrop-filter: blur(5px); }
     .top-status { position: absolute; left: 12px; top: 12px; z-index: 4; display: flex; gap: 6px; align-items: start; width: calc(100vw - 230px); pointer-events: none; }
     .badge { display: flex; flex: 0 0 auto; gap: 6px; align-items: center; min-height: 42px; padding: 6px 8px; color: #dce5e0; font-size: 12px; }
     .badge strong { color: #fff3bf; font-size: 12px; }
     .badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tile-panel { position: static; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 7px; min-width: 150px; max-width: 360px; max-height: 58px; padding: 6px 8px; overflow: hidden; pointer-events: none; }
-    .tile-panel[hidden] { display: none; }
-    .tile-panel strong { color: #fff3bf; font-size: 12px; white-space: nowrap; }
-    .tile-panel span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c5bf; font-size: 11px; }
     .control-panel { right: 12px; top: 12px; width: 204px; display: grid; gap: 8px; padding: 8px; }
     .control-panel h1 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff3bf; font-size: 13px; }
     .stat { color: #b8c5bf; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -43,10 +39,6 @@
     <canvas id="world"></canvas>
     <div class="top-status">
       <div class="badge"><strong id="playerName">Agent</strong><span id="status">connecting</span></div>
-      <section class="tile-panel" id="tilePanel" hidden>
-        <strong data-coords>-</strong>
-        <span data-body></span>
-      </section>
     </div>
     <section class="control-panel">
       <h1 id="name">Agent</h1>
@@ -76,7 +68,6 @@
       document.getElementById("world"),
       {
         minimap: document.getElementById("minimap"),
-        tilePanel: document.getElementById("tilePanel"),
         followSlot: slot,
       }
     );

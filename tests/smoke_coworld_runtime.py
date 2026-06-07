@@ -178,14 +178,23 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "function websocketAddress" in common_js
     assert "function assetBaseAddress" in common_js
     assert "new URL(address || window.location.href, window.location.href)" in common_js
+    assert "tilePanel" not in common_js
+    assert "updateTilePanel" not in common_js
     assert "drawFrame(frame)" not in common_js
+    global_html = (client_dir / "global.html").read_text()
+    assert 'id="status"' not in global_html
+    assert 'class="top-status"' not in global_html
+    assert "team_scores" not in global_html
+    assert "tilePanel" not in global_html
     player_html = (client_dir / "player.html").read_text()
     assert 'worldAddress.pathname.replace(/\\/player$/, "/global")' in player_html
     assert "worldAddress.search = \"\"" in player_html
+    assert "tilePanel" not in player_html
     replay_html = (client_dir / "replay.html").read_text()
     assert "Tribal Village Replay</strong>" not in replay_html
     assert 'id="status"' not in replay_html
     assert 'class="top-status"' not in replay_html
+    assert "tilePanel" not in replay_html
 
 
 def assert_static_clients_are_served(port: int) -> None:

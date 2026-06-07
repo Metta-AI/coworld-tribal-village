@@ -221,7 +221,6 @@ const TribalVillageView = (() => {
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d");
       this.minimap = options.minimap || null;
-      this.tilePanel = options.tilePanel || null;
       this.tileScale = 6;
       this.offsetX = 0;
       this.offsetY = 0;
@@ -230,7 +229,6 @@ const TribalVillageView = (() => {
       this.dragging = false;
       this.dragStart = {x: 0, y: 0};
       this.dragOrigin = {x: 0, y: 0};
-      this.selectedTile = null;
       this.assets = {};
       this.assetBase = null;
       this.message = null;
@@ -272,8 +270,6 @@ const TribalVillageView = (() => {
           this.draw();
           return;
         }
-        this.selectedTile = this.screenToWorld(event.offsetX, event.offsetY);
-        this.updateTilePanel();
       });
       this.canvas.addEventListener("pointerup", (event) => {
         this.dragging = false;
@@ -382,7 +378,6 @@ const TribalVillageView = (() => {
       ctx.restore();
       this.drawLabels(ctx);
       this.drawMinimap();
-      this.updateTilePanel();
     }
 
     drawFloor(ctx) {
@@ -617,28 +612,6 @@ const TribalVillageView = (() => {
       ctx.strokeRect(rectX + 1, rectY + 1, Math.max(1, rectW - 2), Math.max(1, rectH - 2));
     }
 
-    updateTilePanel() {
-      if (!this.tilePanel || !this.selectedTile || !this.frame || !this.cells) return;
-      const x = Math.floor(this.selectedTile.x);
-      const y = Math.floor(this.selectedTile.y);
-      if (x < 0 || y < 0 || x >= this.frame.width || y >= this.frame.height) {
-        this.tilePanel.hidden = true;
-        return;
-      }
-      const idx = this.cellIndex(x, y);
-      const terrain = this.frame.terrain_labels?.[this.cells[idx + OFF.terrain]] || "empty";
-      const kind = this.cells[idx + OFF.thing];
-      const thing = kind === NO_THING ? "none" : (this.frame.thing_labels?.[kind] || `kind ${kind}`);
-      const parts = [`terrain ${terrain}`, `thing ${thing}`];
-      if (kind === THING.agent) {
-        parts.push(`agent ${this.cells[idx + OFF.agentId]}`, `team ${this.cells[idx + OFF.teamId]}`, `hp ${this.cells[idx + OFF.hp]}/${this.cells[idx + OFF.maxHp]}`);
-      }
-      if (kind === THING.assembler) parts.push(`hearts ${this.cells[idx + OFF.count]}`);
-      if (kind === THING.mine) parts.push(`ore ${this.cells[idx + OFF.count]}`);
-      this.tilePanel.querySelector("[data-coords]").textContent = `${x}, ${y}`;
-      this.tilePanel.querySelector("[data-body]").textContent = parts.join(" | ");
-      this.tilePanel.hidden = false;
-    }
   }
 
   function attachWorldSocket(ws, renderer, onState) {
