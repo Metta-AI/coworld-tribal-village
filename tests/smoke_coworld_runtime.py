@@ -225,6 +225,8 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert 'type: "seek"' in replay_html
     assert "keydown" in replay_html
     manifest = json.loads((ROOT / "coworld_manifest_template.json").read_text())
+    assert manifest["variants"][0]["game_config"]["max_steps"] == 5000
+    assert manifest["certification"]["game_config"]["max_steps"] == 64
     assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
     assert manifest["certification"]["game_config"]["tick_rate"] == 20
 

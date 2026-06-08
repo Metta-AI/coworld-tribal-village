@@ -14,7 +14,7 @@ The server sends JSON action observations:
   "slot": 0,
   "name": "Agent 0",
   "tick": 12,
-  "max_steps": 256,
+  "max_steps": 5000,
   "reward": 0.0,
   "score": -0.12,
   "terminated": false,
@@ -28,7 +28,7 @@ The server sends JSON action observations:
   },
   "game_config": {
     "seed": 1,
-    "max_steps": 256
+    "max_steps": 5000
   }
 }
 ```
