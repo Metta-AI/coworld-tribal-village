@@ -20,7 +20,7 @@ by one binary sprite-cell buffer for each rendered frame:
 {
   "type": "state",
   "tick": 12,
-  "max_steps": 256,
+  "max_steps": 5000,
   "started": true,
   "done": false,
   "scores": [0.0],
@@ -55,8 +55,8 @@ action log ends. Replay artifacts store actions only:
   "schema": "tribal-village-replay-v2",
   "initial": {
     "seed": 1,
-    "max_steps": 256,
-    "tick_rate": 5,
+    "max_steps": 5000,
+    "tick_rate": 20,
     "players": ["Agent 0"]
   },
   "ticks": [{"a": "base64-encoded 48 action bytes"}],

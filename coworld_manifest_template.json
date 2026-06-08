@@ -155,9 +155,9 @@
     {
       "id": "default",
       "name": "Default",
-      "description": "Short 48-agent Tribal Village Coworld episode.",
+      "description": "5000-step 48-agent Tribal Village Coworld episode.",
       "game_config": {
-        "max_steps": 128,
+        "max_steps": 5000,
         "tick_rate": 20,
         "player_connect_timeout_seconds": 180,
         "seed": 1,
