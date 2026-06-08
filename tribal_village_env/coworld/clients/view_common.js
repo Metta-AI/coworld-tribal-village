@@ -233,6 +233,7 @@ const TribalVillageView = (() => {
       this.offsetX = 0;
       this.offsetY = 0;
       this.followSlot = options.followSlot ?? null;
+      this.showLabels = options.showLabels === true;
       this.hasFit = false;
       this.dragging = false;
       this.dragStart = {x: 0, y: 0};
@@ -294,6 +295,11 @@ const TribalVillageView = (() => {
 
     setFollowSlot(slot) {
       this.followSlot = slot;
+      this.draw();
+    }
+
+    setShowLabels(showLabels) {
+      this.showLabels = showLabels === true;
       this.draw();
     }
 
@@ -597,6 +603,7 @@ const TribalVillageView = (() => {
     }
 
     drawLabels(ctx) {
+      if (!this.showLabels) return;
       if (this.tileScale < 5) return;
       ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.textBaseline = "bottom";
