@@ -24,6 +24,14 @@ const
   MapRoomObjectsMines* = 20
   MapRoomObjectsWalls* = 30
 
+  # Keep initial villages on an inset outer ring instead of scattering them
+  # across the map center.
+  VillageSpawnMargin* = 16
+  VillageSpawnJitter* = 8
+  VillageSpawnMaxEdgeDistance* = 28
+  VillageSpawnSearchAttempts* = 300
+  MinHouseSpacing* = 18
+
   # Agent Parameters
   MapObjectAgentMaxInventory* = 5
 
@@ -1157,6 +1165,69 @@ proc randomEmptyPos(r: var Rand, env: Environment): IVec2 =
       return pos
   quit("Failed to find an empty position, map too full!")
 
+proc distanceToPlayableEdge(pos: IVec2): int =
+  let horizontalEdge = min(
+    int(pos.x) - MapBorder,
+    MapWidth - MapBorder - 1 - int(pos.x)
+  )
+  let verticalEdge = min(
+    int(pos.y) - MapBorder,
+    MapHeight - MapBorder - 1 - int(pos.y)
+  )
+  min(
+    horizontalEdge,
+    verticalEdge
+  )
+
+proc villageSpawnAnchor(index, count, phase: int): IVec2 =
+  let left = MapBorder + VillageSpawnMargin
+  let right = MapWidth - MapBorder - VillageSpawnMargin - 1
+  let top = MapBorder + VillageSpawnMargin
+  let bottom = MapHeight - MapBorder - VillageSpawnMargin - 1
+  let spanX = right - left
+  let spanY = bottom - top
+  let perimeter = 2 * (spanX + spanY)
+  var offset = (phase + (index * perimeter) div count) mod perimeter
+
+  if offset <= spanX:
+    return ivec2(left + offset, top)
+  offset -= spanX
+  if offset <= spanY:
+    return ivec2(right, top + offset)
+  offset -= spanY
+  if offset <= spanX:
+    return ivec2(right - offset, bottom)
+  offset -= spanX
+  ivec2(left, bottom - offset)
+
+proc canPlaceHouseAt(
+  env: Environment,
+  houseStruct: Structure,
+  topLeft: IVec2,
+  houseCenters: seq[IVec2]
+): bool =
+  let candidateCenter = topLeft + houseStruct.centerPos
+  if distanceToPlayableEdge(candidateCenter) > VillageSpawnMaxEdgeDistance:
+    return false
+
+  for dy in 0 ..< houseStruct.height:
+    for dx in 0 ..< houseStruct.width:
+      let checkX = topLeft.x + dx
+      let checkY = topLeft.y + dy
+      if checkX < MapBorder or checkY < MapBorder or
+         checkX >= MapWidth - MapBorder or checkY >= MapHeight - MapBorder or
+         not env.isEmpty(ivec2(checkX, checkY)) or
+         env.terrain[checkX][checkY] == Water:
+        return false
+
+  for center in houseCenters:
+    let dx = abs(center.x - candidateCenter.x)
+    let dy = abs(center.y - candidateCenter.y)
+    if max(dx, dy) < MinHouseSpacing:
+      return false
+
+  true
+
 proc clearTintModifications(env: Environment) =
   ## Clear only active tile modifications for performance
   for pos in env.activeTiles.positions:
@@ -1440,42 +1511,39 @@ proc init(env: Environment) =
   let numHouses = MapRoomObjectsHouses
   var totalAgentsSpawned = 0
   var houseCenters: seq[IVec2] = @[]
+  let villageSpawnPhase = randIntExclusive(r, 0, 1_000_000)
   for i in 0 ..< numHouses:
     let houseStruct = createHouse()
     var placed = false
     var placementPosition: IVec2
+    let anchor = villageSpawnAnchor(i, numHouses, villageSpawnPhase)
 
-    # Simple random placement with collision avoidance
-    for attempt in 0 ..< 200:
-      let candidatePos = r.randomEmptyPos(env)
-      # Check if position has enough space for the 5x5 house
-      var canPlace = true
-      for dy in 0 ..< houseStruct.height:
-        for dx in 0 ..< houseStruct.width:
-          let checkX = candidatePos.x + dx
-          let checkY = candidatePos.y + dy
-          if checkX >= MapWidth or checkY >= MapHeight or
-             not env.isEmpty(ivec2(checkX, checkY)) or
-             env.terrain[checkX][checkY] == Water:
-            canPlace = false
-            break
-        if not canPlace: break
-
-      # Keep houses spaced apart (Chebyshev) to avoid crowding
-      if canPlace:
-        const MinHouseSpacing = 18
-        let candidateCenter = candidatePos + houseStruct.centerPos
-        for c in houseCenters:
-          let dx = abs(c.x - candidateCenter.x)
-          let dy = abs(c.y - candidateCenter.y)
-          if max(dx, dy) < MinHouseSpacing:
-            canPlace = false
-            break
-
-      if canPlace:
+    for attempt in 0 ..< VillageSpawnSearchAttempts:
+      let jitter = VillageSpawnJitter + attempt div 80
+      let candidateCenter = anchor + ivec2(
+        randIntInclusive(r, -jitter, jitter),
+        randIntInclusive(r, -jitter, jitter)
+      )
+      let candidatePos = candidateCenter - houseStruct.centerPos
+      if env.canPlaceHouseAt(houseStruct, candidatePos, houseCenters):
         placementPosition = candidatePos
         placed = true
         break
+
+    if not placed:
+      for radius in 0 .. VillageSpawnMaxEdgeDistance:
+        for dy in -radius .. radius:
+          for dx in -radius .. radius:
+            if max(abs(dx), abs(dy)) != radius:
+              continue
+            let candidateCenter = anchor + ivec2(dx, dy)
+            let candidatePos = candidateCenter - houseStruct.centerPos
+            if env.canPlaceHouseAt(houseStruct, candidatePos, houseCenters):
+              placementPosition = candidatePos
+              placed = true
+              break
+          if placed: break
+        if placed: break
 
     if placed:
       let elements = getStructureElements(houseStruct, placementPosition)
@@ -1601,6 +1669,8 @@ proc init(env: Environment) =
             break
 
       # Note: Entrances are left empty (no walls placed there)
+    else:
+      quit("Failed to place village on the outer spawn ring")
 
   # Now place additional random walls after villages to avoid blocking corner placement
   for i in 0 ..< MapRoomObjectsWalls:
