@@ -12,12 +12,14 @@ import time
 import zlib
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from urllib.error import URLError
 from urllib.request import urlopen
 
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from tribal_village_env.coworld.server import CoworldConfig
 from tribal_village_env.coworld.direct_env import CoworldTribalVillageEnv
 from tribal_village_env.coworld.player import BuiltinAIPlayer
 
@@ -79,7 +81,29 @@ async def assert_websocket_rejected(url: str, failure_message: str) -> None:
         raise AssertionError(failure_message)
 
 
-async def assert_live_websockets(port: int) -> None:
+def coworld_config_payload() -> dict[str, Any]:
+    return {
+        "tokens": [f"token-{slot}" for slot in range(PLAYER_COUNT)],
+        "players": [{"name": f"Agent {slot}"} for slot in range(PLAYER_COUNT)],
+        "max_steps": 4,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 1,
+    }
+
+
+def assert_default_coworld_config_chooses_fresh_seed() -> None:
+    with patch(
+        "tribal_village_env.coworld.server.secrets.randbelow",
+        side_effect=[16, 22],
+    ):
+        first = CoworldConfig.from_dict(coworld_config_payload())
+        second = CoworldConfig.from_dict(coworld_config_payload() | {"seed": 0})
+    assert first.seed == 17
+    assert second.seed == 23
+    assert CoworldConfig.from_dict(coworld_config_payload() | {"seed": 7}).seed == 7
+
+
+async def assert_live_websockets(port: int) -> int:
     async with websockets.connect(
         f"ws://127.0.0.1:{port}/global",
         open_timeout=5,
@@ -109,6 +133,7 @@ async def assert_live_websockets(port: int) -> None:
                     )
                 )
 
+            episode_seed: int | None = None
             for slot, player_ws in enumerate(player_websockets):
                 message = json.loads(
                     await asyncio.wait_for(player_ws.recv(), timeout=10)
@@ -116,7 +141,11 @@ async def assert_live_websockets(port: int) -> None:
                 assert message["type"] == "observation"
                 assert message["slot"] == slot
                 assert message["action_space"]["n"] == 64
-                assert message["game_config"]["seed"] == 1
+                seed = int(message["game_config"]["seed"])
+                assert seed >= 1
+                if episode_seed is None:
+                    episode_seed = seed
+                assert seed == episode_seed
                 assert "view" not in message
                 assert "frame" not in message
 
@@ -132,9 +161,12 @@ async def assert_live_websockets(port: int) -> None:
             while time.monotonic() < deadline and message["tick"] == 0:
                 message, _ = await recv_world_frame(global_ws)
             assert message["tick"] > 0
+            assert episode_seed is not None
+            return episode_seed
         finally:
             for player_ws in player_websockets:
                 await player_ws.close()
+    raise AssertionError("live websocket check did not return an episode seed")
 
 
 async def assert_replay_autoplays_and_loops(port: int) -> None:
@@ -338,6 +370,8 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert manifest["certification"]["game_config"]["max_steps"] == 64
     assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
     assert manifest["certification"]["game_config"]["tick_rate"] == 20
+    assert "seed" not in manifest["variants"][0]["game_config"]
+    assert "seed" not in manifest["certification"]["game_config"]
     assert (
         manifest["commissioner"][0]["source_url"]
         == "https://github.com/Metta-AI/commissioners/tree/main/commissioners/default"
@@ -367,16 +401,7 @@ def main() -> None:
         replay_z_path = tempdir / "replay.json.z"
         config_path.write_text(
             json.dumps(
-                {
-                    "tokens": [f"token-{slot}" for slot in range(PLAYER_COUNT)],
-                    "players": [
-                        {"name": f"Agent {slot}"} for slot in range(PLAYER_COUNT)
-                    ],
-                    "max_steps": 4,
-                    "tick_rate": 20,
-                    "player_connect_timeout_seconds": 1,
-                    "seed": 1,
-                }
+                coworld_config_payload()
             )
         )
         port = free_port()
@@ -414,7 +439,8 @@ def main() -> None:
                     "live runtime accepted /replay as a visual stream",
                 )
             )
-            asyncio.run(assert_live_websockets(port))
+            assert_default_coworld_config_chooses_fresh_seed()
+            episode_seed = asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()
             assert_coworld_envs_have_independent_builtin_ai()
             assert_action_tints_are_exported_as_sprite_state()
@@ -429,6 +455,7 @@ def main() -> None:
             assert len(results["team_scores"]) == 8
             assert results["truncation_reason"] == "max_steps"
             assert replay["schema"] == "tribal-village-replay-v2"
+            assert replay["initial"]["seed"] == episode_seed
             assert replay["initial"]["players"][0] == "Agent 0"
             assert len(replay["ticks"]) == results["ticks"]
             assert "actions" not in replay

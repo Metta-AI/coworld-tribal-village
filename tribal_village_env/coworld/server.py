@@ -5,6 +5,7 @@ import base64
 import gzip
 import json
 import os
+import secrets
 import zlib
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
@@ -48,6 +49,7 @@ AGENTS_PER_TEAM = 6
 DEFAULT_MAX_STEPS = 2000
 DEFAULT_TICK_RATE = 20.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 180.0
+EPISODE_SEED_MAX = 2_147_483_647
 INITIAL_ACTION_TIMEOUT_SECONDS = 5.0
 REPLAY_SCHEMA_V1 = "tribal-village-replay-v1"
 REPLAY_SCHEMA_V2 = "tribal-village-replay-v2"
@@ -58,6 +60,10 @@ CELL_OFFSET_THING = 4
 CELL_OFFSET_AGENT_ID = 6
 CELL_OFFSET_TEAM_ID = 7
 THING_AGENT = 0
+
+
+def fresh_episode_seed() -> int:
+    return secrets.randbelow(EPISODE_SEED_MAX) + 1
 
 
 def read_data(uri: str) -> bytes:
@@ -157,7 +163,11 @@ class CoworldConfig:
         )
         if connect_timeout < 0:
             raise ValueError("player_connect_timeout_seconds must be non-negative")
-        seed = max(1, int(data.get("seed", 1)))
+        seed = int(data.get("seed", 0))
+        if seed < 0 or seed > EPISODE_SEED_MAX:
+            raise ValueError(f"seed must be between 0 and {EPISODE_SEED_MAX}")
+        if seed == 0:
+            seed = fresh_episode_seed()
         return cls(
             tokens=tokens,
             players=players,

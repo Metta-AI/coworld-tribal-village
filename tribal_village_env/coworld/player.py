@@ -20,14 +20,10 @@ class BuiltinAIPlayer:
     """
 
     def __init__(self, first_message: dict[str, Any]) -> None:
-        game_config = first_message.get("game_config", {})
-        if not isinstance(game_config, dict):
-            game_config = {}
-        self.seed = max(1, int(game_config.get("seed", 1)))
+        game_config = first_message["game_config"]
+        self.seed = int(game_config["seed"])
         self.env = CoworldTribalVillageEnv(
-            max_steps=int(
-                first_message.get("max_steps", game_config.get("max_steps", 1))
-            ),
+            max_steps=int(first_message["max_steps"]),
             config={"seed": self.seed},
         )
         self.env.reset()

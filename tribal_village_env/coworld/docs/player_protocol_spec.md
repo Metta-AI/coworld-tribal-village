@@ -37,9 +37,9 @@ The visual game stream is not duplicated on `/player`. Browser player pages use
 the same sprite-cell renderer as spectators, opening `/global` for the live
 world while `/player` is only the slot-authenticated action channel.
 
-The bundled `default-ai-agent` uses `game_config.seed` to run the existing Nim
-role-based scripted AI in a deterministic local mirror, then sends its selected
-slot action back over this protocol.
+The bundled `default-ai-agent` uses the server-sent `game_config.seed` to run
+the existing Nim role-based scripted AI in a deterministic local mirror, then
+sends its selected slot action back over this protocol.
 
 Players respond with one action:
 

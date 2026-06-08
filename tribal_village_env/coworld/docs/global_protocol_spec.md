@@ -49,7 +49,8 @@ assets from `/assets/...` and shared code from
 `/client/common/view_common.js`.
 
 Replay snapshots use `"type": "replay"` and loop to tick 0 after the recorded
-action log ends. Replay artifacts store actions only:
+action log ends. Replay artifacts store actions only plus the effective initial
+seed chosen by the live runtime:
 
 ```json
 {

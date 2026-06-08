@@ -72,7 +72,7 @@ Pass a config dict to the Python wrapper (rendering + gameplay tuning):
 ```python
 config = {
     'max_steps': 1000,          # Episode length (Python-side truncation)
-    'seed': 1,                  # Optional deterministic map seed; 0/random by default
+    'seed': 1,                  # Optional deterministic map seed; omit or set 0 for a fresh episode seed
     'render_mode': 'rgb_array', # or 'ansi'
     'render_scale': 4,          # RGB scale factor (full-map render)
     'ansi_buffer_size': 1_000_000,

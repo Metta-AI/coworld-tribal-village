@@ -56,10 +56,10 @@
           "default": 180
         },
         "seed": {
-          "description": "Deterministic episode seed used for map generation, replay, and bundled scripted AI mirrors.",
+          "description": "Optional deterministic episode seed used for map generation, replay, and bundled scripted AI mirrors. Omit or set 0 to choose a fresh random episode seed.",
           "type": "integer",
-          "minimum": 1,
-          "default": 1
+          "minimum": 0,
+          "maximum": 2147483647
         }
       }
     },
@@ -160,7 +160,6 @@
         "max_steps": 2000,
         "tick_rate": 20,
         "player_connect_timeout_seconds": 180,
-        "seed": 1,
         "players": [
           {"name": "Agent 0"},
           {"name": "Agent 1"},
@@ -219,7 +218,6 @@
       "max_steps": 64,
       "tick_rate": 20,
       "player_connect_timeout_seconds": 180,
-      "seed": 1,
       "players": [
         {"name": "Agent 0"},
         {"name": "Agent 1"},
