@@ -294,6 +294,10 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert manifest["certification"]["game_config"]["max_steps"] == 64
     assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
     assert manifest["certification"]["game_config"]["tick_rate"] == 20
+    assert (
+        manifest["commissioner"][0]["source_url"]
+        == "https://github.com/Metta-AI/commissioners/tree/main/commissioners/default"
+    )
 
 
 def assert_static_clients_are_served(port: int) -> None:
