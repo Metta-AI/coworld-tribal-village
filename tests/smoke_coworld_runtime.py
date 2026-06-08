@@ -18,12 +18,15 @@ from urllib.request import urlopen
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from tribal_village_env.coworld.direct_env import CoworldTribalVillageEnv
 from tribal_village_env.coworld.player import BuiltinAIPlayer
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_COUNT = 48
 SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1"
+DELAYED_FIRST_ACTION_SLOT = 47
+DELAYED_FIRST_ACTION = 11
 
 
 def free_port() -> int:
@@ -82,24 +85,44 @@ async def assert_live_websockets(port: int) -> None:
         assert len(message["agents"]) == PLAYER_COUNT
         assert message["agents"][0]["slot"] == 0
         assert message["agents"][0]["name"] == "Agent 0"
-        start = time.monotonic()
-        for _ in range(3):
-            await recv_world_frame(global_ws)
-        assert time.monotonic() - start < 0.4
 
-    async with websockets.connect(
-        f"ws://127.0.0.1:{port}/player?slot=0&token=token-0",
-        open_timeout=5,
-        max_size=None,
-    ) as player_ws:
-        message = json.loads(await asyncio.wait_for(player_ws.recv(), timeout=10))
-        assert message["type"] == "observation"
-        assert message["slot"] == 0
-        assert message["action_space"]["n"] == 64
-        assert message["game_config"]["seed"] == 1
-        assert "view" not in message
-        assert "frame" not in message
-        await player_ws.send(json.dumps({"type": "action", "action": 8}))
+        player_websockets = []
+        try:
+            for slot in range(PLAYER_COUNT):
+                player_websockets.append(
+                    await websockets.connect(
+                        f"ws://127.0.0.1:{port}/player?slot={slot}&token=token-{slot}",
+                        open_timeout=5,
+                        max_size=None,
+                    )
+                )
+
+            for slot, player_ws in enumerate(player_websockets):
+                message = json.loads(
+                    await asyncio.wait_for(player_ws.recv(), timeout=10)
+                )
+                assert message["type"] == "observation"
+                assert message["slot"] == slot
+                assert message["action_space"]["n"] == 64
+                assert message["game_config"]["seed"] == 1
+                assert "view" not in message
+                assert "frame" not in message
+
+            for slot, player_ws in enumerate(player_websockets):
+                if slot != DELAYED_FIRST_ACTION_SLOT:
+                    await player_ws.send(json.dumps({"type": "action", "action": 8}))
+
+            await asyncio.sleep(0.2)
+            await player_websockets[DELAYED_FIRST_ACTION_SLOT].send(
+                json.dumps({"type": "action", "action": DELAYED_FIRST_ACTION})
+            )
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and message["tick"] == 0:
+                message, _ = await recv_world_frame(global_ws)
+            assert message["tick"] > 0
+        finally:
+            for player_ws in player_websockets:
+                await player_ws.close()
 
 
 async def assert_replay_autoplays_and_loops(port: int) -> None:
@@ -169,6 +192,22 @@ def assert_builtin_ai_player_can_choose_action() -> None:
         assert 0 <= action < 64
     finally:
         player.close()
+
+
+def assert_coworld_envs_have_independent_builtin_ai() -> None:
+    env_a = CoworldTribalVillageEnv(max_steps=4, config={"seed": 1})
+    env_b = CoworldTribalVillageEnv(max_steps=4, config={"seed": 1})
+    try:
+        env_a.reset()
+        env_b.reset()
+        env_a.reset_builtin_ai(1)
+        env_b.reset_builtin_ai(1)
+        actions_a0 = env_a.builtin_ai_actions()
+        env_a.step(actions_a0)
+        assert env_b.builtin_ai_actions() == actions_a0
+    finally:
+        env_a.close()
+        env_b.close()
 
 
 def assert_client_websockets_are_proxy_relative() -> None:
@@ -303,6 +342,7 @@ def main() -> None:
             )
             asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()
+            assert_coworld_envs_have_independent_builtin_ai()
             process.wait(timeout=30)
             if process.returncode != 0:
                 stderr = process.stderr.read() if process.stderr else ""
@@ -322,6 +362,7 @@ def main() -> None:
                 validate=True,
             )
             assert len(first_actions) == PLAYER_COUNT
+            assert first_actions[DELAYED_FIRST_ACTION_SLOT] == DELAYED_FIRST_ACTION
         finally:
             if process.poll() is None:
                 process.terminate()
