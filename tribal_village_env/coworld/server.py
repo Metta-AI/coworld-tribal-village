@@ -457,25 +457,22 @@ class TribalVillageReplay:
 
     async def stream(self, websocket: WebSocket) -> None:
         playback = ReplayPlayback(
-            speed=replay_speed(websocket.query_params.get("speed"))
+            speed=replay_speed(websocket.query_params.get("speed")),
+            seek_tick=None,
         )
         await websocket.accept()
         control_task = asyncio.create_task(self.receive_controls(websocket, playback))
-        env = _make_env(
-            max_steps=self.max_steps,
-            seed=self.seed,
-        )
+        env = self.env_at_tick(0)
         try:
-            env.reset()
             while True:
+                if playback.seek_tick is not None:
+                    env.close()
+                    env = self.env_at_tick(playback.seek_tick)
+                    playback.seek_tick = None
                 await send_sprite_snapshot(websocket, env, self._snapshot(env))
                 if env.step_count >= len(self.actions):
                     env.close()
-                    env = _make_env(
-                        max_steps=self.max_steps,
-                        seed=self.seed,
-                    )
-                    env.reset()
+                    env = self.env_at_tick(0)
                     await asyncio.sleep(0.2)
                     continue
                 actions = self.actions[env.step_count]
@@ -516,16 +513,40 @@ class TribalVillageReplay:
             message = json.loads(raw_message)
             if message["type"] == "speed":
                 playback.speed = replay_speed(message["speed"])
+            elif message["type"] == "seek":
+                playback.seek_tick = replay_tick(message["tick"], len(self.actions))
+
+    def env_at_tick(self, tick: int) -> CoworldTribalVillageEnv:
+        env = _make_env(
+            max_steps=self.max_steps,
+            seed=self.seed,
+        )
+        env.reset()
+        for _ in range(tick):
+            actions = self.actions[env.step_count]
+            env.step(
+                [
+                    int(actions[slot]) if slot < len(actions) else 0
+                    for slot in range(PLAYER_COUNT)
+                ]
+            )
+        return env
 
 
 @dataclass
 class ReplayPlayback:
     speed: float
+    seek_tick: int | None
 
 
 def replay_speed(value: Any) -> float:
     speed = DEFAULT_REPLAY_SPEED if value is None or value == "" else float(value)
     return max(MIN_REPLAY_SPEED, min(MAX_REPLAY_SPEED, speed))
+
+
+def replay_tick(value: Any, max_steps: int) -> int:
+    tick = int(value)
+    return max(0, min(max_steps, tick))
 
 
 def replay_player_names(value: Any) -> list[str]:
