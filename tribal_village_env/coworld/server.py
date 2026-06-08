@@ -46,7 +46,7 @@ PLAYER_COUNT = 48
 TEAM_COUNT = 8
 AGENTS_PER_TEAM = 6
 DEFAULT_MAX_STEPS = 256
-DEFAULT_TICK_RATE = 5.0
+DEFAULT_TICK_RATE = 20.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 180.0
 REPLAY_SCHEMA_V1 = "tribal-village-replay-v1"
 REPLAY_SCHEMA_V2 = "tribal-village-replay-v2"
@@ -276,7 +276,7 @@ class TribalVillageCoworld:
                 await send_sprite_snapshot(websocket, self.env, self.snapshot("state"))
                 if self.done:
                     break
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(1.0 / self.config.tick_rate)
         except Exception:
             return
 
