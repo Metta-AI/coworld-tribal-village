@@ -190,6 +190,9 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "minTileScale()" in common_js
     assert "clampView()" in common_js
     assert "this.tileScale * factor, this.minTileScale(), MAX_TILE_SCALE" in common_js
+    assert "this.showLabels = options.showLabels === true" in common_js
+    assert "setShowLabels(showLabels)" in common_js
+    assert "if (!this.showLabels) return" in common_js
     assert "strokeRect(rectX + 1, rectY + 1" in common_js
     assert "function routedHttpAddress" in common_js
     assert "function websocketAddress" in common_js
@@ -214,6 +217,8 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "tilePanel" not in replay_html
     assert 'data-replay="restart"' in replay_html
     assert 'id="timeline"' in replay_html
+    assert 'id="names"' in replay_html
+    assert "renderer.setShowLabels(namesEl.checked)" in replay_html
     assert 'data-speed="slower"' in replay_html
     assert 'data-speed="faster"' in replay_html
     assert 'type: "speed"' in replay_html

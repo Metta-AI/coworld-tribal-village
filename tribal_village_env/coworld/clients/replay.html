@@ -20,6 +20,8 @@
     .replay-controls button:hover { border-color: rgba(255, 226, 151, .72); }
     .replay-controls input[type="range"] { width: clamp(120px, 24vw, 320px); accent-color: #ffe297; }
     .replay-controls output { min-width: 34px; color: #fff3bf; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
+    .names-toggle { display: flex; gap: 5px; align-items: center; height: 32px; color: #eef2ee; font-size: 12px; white-space: nowrap; }
+    .names-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #ffe297; }
     #tick { min-width: 86px; color: #eef2ee; }
     #minimap { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #050706; border: 1px solid rgba(238, 242, 238, .2); }
     @media (max-width: 760px) {
@@ -39,6 +41,10 @@
       <button type="button" data-replay="restart" title="Jump to start" aria-label="Jump to start">|&lt;</button>
       <input id="timeline" type="range" min="0" max="1" value="0" step="1" aria-label="Replay position">
       <output id="tick">0 / 0</output>
+      <label class="names-toggle" title="Show player names">
+        <input id="names" type="checkbox" aria-label="Show player names">
+        <span>Names</span>
+      </label>
       <button type="button" data-speed="slower" title="Slower" aria-label="Slower">-</button>
       <output id="speed">1x</output>
       <button type="button" data-speed="faster" title="Faster" aria-label="Faster">+</button>
@@ -57,6 +63,7 @@
     const speedEl = document.getElementById("speed");
     const timelineEl = document.getElementById("timeline");
     const tickEl = document.getElementById("tick");
+    const namesEl = document.getElementById("names");
     let draggingTimeline = false;
 
     function speedValue() {
@@ -110,6 +117,7 @@
     };
     document.querySelector("[data-speed='slower']").onclick = () => updateSpeed(speedIndex - 1);
     document.querySelector("[data-speed='faster']").onclick = () => updateSpeed(speedIndex + 1);
+    namesEl.onchange = () => renderer.setShowLabels(namesEl.checked);
     window.addEventListener("keydown", (event) => {
       if (event.key === "Home") {
         timelineEl.value = "0";
