@@ -28,10 +28,17 @@ SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v2"
 DELAYED_FIRST_ACTION_SLOT = 47
 DELAYED_FIRST_ACTION = 11
 CELL_OFFSET_FLAGS = 22
+CELL_OFFSET_THING = 4
+CELL_OFFSET_AGENT_ID = 6
+CELL_OFFSET_TEAM_ID = 7
+CELL_OFFSET_INVENTORY_LANTERN = 16
 CELL_OFFSET_ACTION_R = 23
 CELL_OFFSET_ACTION_G = 24
 CELL_OFFSET_ACTION_B = 25
 ACTION_TINT_FLAG = 4
+THING_AGENT = 0
+THING_PLANTED_LANTERN = 11
+AGENTS_PER_TEAM = 6
 
 
 def free_port() -> int:
@@ -236,6 +243,43 @@ def assert_action_tints_are_exported_as_sprite_state() -> None:
         env.close()
 
 
+def assert_builtin_ai_builds_lantern_territory() -> None:
+    env = CoworldTribalVillageEnv(max_steps=600, config={"seed": 1})
+    try:
+        env.reset()
+        env.reset_builtin_ai(1)
+        cumulative_rewards = [0.0] * PLAYER_COUNT
+        for _ in range(600):
+            env.step(env.builtin_ai_actions())
+            for slot, reward in enumerate(env.rewards.tolist()):
+                cumulative_rewards[slot] += float(reward)
+
+        frame, cells = env.sprite_frame()
+        planted_by_team = [0] * (PLAYER_COUNT // AGENTS_PER_TEAM)
+        carried_by_team = [0] * (PLAYER_COUNT // AGENTS_PER_TEAM)
+        for cell in range(frame["width"] * frame["height"]):
+            idx = cell * frame["stride"]
+            thing = cells[idx + CELL_OFFSET_THING]
+            if thing == THING_PLANTED_LANTERN:
+                planted_by_team[cells[idx + CELL_OFFSET_TEAM_ID]] += 1
+            elif thing == THING_AGENT:
+                agent_id = cells[idx + CELL_OFFSET_AGENT_ID]
+                carried_by_team[agent_id // AGENTS_PER_TEAM] += cells[
+                    idx + CELL_OFFSET_INVENTORY_LANTERN
+                ]
+
+        team_scores = [
+            sum(cumulative_rewards[start : start + AGENTS_PER_TEAM])
+            for start in range(0, PLAYER_COUNT, AGENTS_PER_TEAM)
+        ]
+        assert sum(planted_by_team) >= 75
+        assert planted_by_team[6] >= 1
+        assert carried_by_team[6] == 0
+        assert sum(team_scores) > 0.0
+    finally:
+        env.close()
+
+
 def assert_client_websockets_are_proxy_relative() -> None:
     client_dir = ROOT / "tribal_village_env" / "coworld" / "clients"
     for client, websocket_path in {
@@ -374,6 +418,7 @@ def main() -> None:
             assert_builtin_ai_player_can_choose_action()
             assert_coworld_envs_have_independent_builtin_ai()
             assert_action_tints_are_exported_as_sprite_state()
+            assert_builtin_ai_builds_lantern_territory()
             process.wait(timeout=30)
             if process.returncode != 0:
                 stderr = process.stderr.read() if process.stderr else ""

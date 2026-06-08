@@ -87,7 +87,7 @@ config = {
     'spear_reward': 0.0,
     'armor_reward': 0.0,
     'food_reward': 0.0,
-    'cloth_reward': 0.0,
+    'cloth_reward': 0.02,      # Team reward per healthy planted lantern per tick
     'tumor_kill_reward': 0.0,
     'survival_penalty': -0.01,
     'death_penalty': -5.0,
@@ -114,6 +114,7 @@ These gameplay settings map to `EnvironmentConfig` in `src/environment.nim`.
 2. **Craft** items using specialized buildings (forge spears, weave lanterns, etc.)
 3. **Cooperate** within teams and compete across teams
 4. **Defend** against tumors using crafted spears
+5. **Claim territory** with planted lanterns; healthy lanterns provide ongoing team score
 
 ## Controls
 

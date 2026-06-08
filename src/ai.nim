@@ -633,68 +633,33 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
   case state.role:
 
   of Lighter:
-    let teammateNeedingBread = findNearestTeammateNeeding(env, agent, NeedBread)
-
-    # Priority 1: Deliver bread after the team has enough lantern coverage.
-    if agent.inventoryBread > 0 and teammateNeedingBread != nil:
-      let dx = abs(teammateNeedingBread.pos.x - agent.pos.x)
-      let dy = abs(teammateNeedingBread.pos.y - agent.pos.y)
-      if max(dx, dy) == 1'i32:
-        return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammateNeedingBread.pos).uint8))
-      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammateNeedingBread.pos, controller.rng).uint8))
-
-    var teamLanterns = 0
-    for t in env.things:
-      if t.kind == PlantedLantern and t.teamId == getTeamId(agent.agentId) and t.lanternHealthy:
-        inc teamLanterns
-
-    if agent.inventoryLantern == 0 and teammateNeedingBread != nil and teamLanterns >= 3:
-      if agent.inventoryWheat > 0:
-        let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, ClayOven)
-        if did: return act
-      else:
-        let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
-        if did: return act
-
-    # Priority 2: Plant lanterns outward in rings from home assembler
+    # Priority 1: Plant lanterns outward from home without stranding carried lanterns.
     if agent.inventoryLantern > 0:
-      # Determine home center (agent.homeassembler); if unset, use agent.pos
       let center = if agent.homeassembler.x >= 0: agent.homeassembler else: agent.pos
-
-      # Compute current preferred ring radius: smallest R where no plantable tile found yet; start at 3
-      var planted = false
-      let maxR = 12  # don't search too far per step
-      for radius in 3 .. maxR:
-        # scan the ring (Chebyshev distance == radius) around center
-        var bestDir = -1
-        for i in 0 .. 7:
-          let dir = orientationToVec(Orientation(i))
-          let target = agent.pos + dir
-          let dist = max(abs(target.x - center.x), abs(target.y - center.y))
-          if dist != radius: continue
-          if target.x < 0 or target.x >= MapWidth or target.y < 0 or target.y >= MapHeight:
-            continue
-          if not env.isEmpty(target):
-            continue
-          if env.terrain[target.x][target.y] == Water:
-            continue
-          var spaced = true
-          for t in env.things:
-            if t.kind == PlantedLantern and chebyshevDist(target, t.pos) < 3'i32:
-              spaced = false
-              break
-          if spaced:
-            bestDir = i
+      var bestDir = -1
+      var bestDist = int32.low
+      for i in 0 .. 7:
+        let dir = orientationToVec(Orientation(i))
+        let target = agent.pos + dir
+        if not isValidEmptyTile(env, target) or isTileFrozen(target, env):
+          continue
+        var spaced = true
+        for t in env.things:
+          if t.kind == PlantedLantern and chebyshevDist(target, t.pos) < 3'i32:
+            spaced = false
             break
-        if bestDir >= 0:
-          planted = true
-          return saveStateAndReturn(controller, agentId, state, encodeAction(6'u8, bestDir.uint8))
+        if spaced:
+          let dist = chebyshevDist(target, center)
+          if dist > bestDist:
+            bestDist = dist
+            bestDir = i
+      if bestDir >= 0:
+        return saveStateAndReturn(controller, agentId, state, encodeAction(6'u8, bestDir.uint8))
 
-      # If no ring slot found, step outward to expand search radius next tick
       let awayFromCenter = getMoveAway(env, agent.pos, center, controller.rng)
       return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, awayFromCenter.uint8))
 
-    # Priority 3: If adjacent to an existing lantern without one to plant, push it further away
+    # Priority 2: If adjacent to an existing lantern without one to plant, push it further away
     elif isAdjacentToLantern(env, agent.pos):
       let near = findNearestLantern(env, agent.pos)
       if near.found and near.dist == 1'i32:
@@ -706,12 +671,12 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let step = agent.pos + ivec2((if dx != 0: dx div abs(dx) else: 0'i32), (if dy != 0: dy div abs(dy) else: 0'i32))
       return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, neighborDirIndex(agent.pos, step).uint8))
 
-    # Priority 4: Craft lantern if we have wheat
+    # Priority 3: Craft lantern if we have wheat
     if agent.inventoryWheat > 0:
       let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, WeavingLoom)
       if did: return act
 
-    # Priority 5: Collect wheat using spiral search
+    # Priority 4: Collect wheat using spiral search
     else:
       let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
       if did: return act
@@ -802,7 +767,20 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       if didPlant:
         return act
 
-    # Step 3: Gather resources to plant (wood then wheat)
+    # Step 3: Bake and deliver bread after local farming setup is online.
+    let teammateNeedingBread = findNearestTeammateNeeding(env, agent, NeedBread)
+    if agent.inventoryBread > 0 and teammateNeedingBread != nil:
+      let dx = abs(teammateNeedingBread.pos.x - agent.pos.x)
+      let dy = abs(teammateNeedingBread.pos.y - agent.pos.y)
+      if max(dx, dy) == 1'i32:
+        return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammateNeedingBread.pos).uint8))
+      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammateNeedingBread.pos, controller.rng).uint8))
+
+    if teammateNeedingBread != nil and agent.inventoryWheat > 0:
+      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, ClayOven)
+      if did: return act
+
+    # Step 4: Gather resources to plant or bake (wood then wheat)
     if agent.inventoryWood == 0:
       let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Tree)
       if did: return act
@@ -811,7 +789,7 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
       if did: return act
 
-    # Step 4: If stocked but couldn't plant (no fertile nearby), roam to expand search
+    # Step 5: If stocked but couldn't plant (no fertile nearby), roam to expand search
     return controller.moveNextSearch(env, agent, agentId, state)
 
   of Hearter:
