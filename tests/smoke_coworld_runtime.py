@@ -82,6 +82,10 @@ async def assert_live_websockets(port: int) -> None:
         assert len(message["agents"]) == PLAYER_COUNT
         assert message["agents"][0]["slot"] == 0
         assert message["agents"][0]["name"] == "Agent 0"
+        start = time.monotonic()
+        for _ in range(3):
+            await recv_world_frame(global_ws)
+        assert time.monotonic() - start < 0.4
 
     async with websockets.connect(
         f"ws://127.0.0.1:{port}/player?slot=0&token=token-0",
@@ -202,8 +206,8 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert 'type: "speed"' in replay_html
     assert "keydown" in replay_html
     manifest = json.loads((ROOT / "coworld_manifest_template.json").read_text())
-    assert manifest["variants"][0]["game_config"]["tick_rate"] == 5
-    assert manifest["certification"]["game_config"]["tick_rate"] == 5
+    assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
+    assert manifest["certification"]["game_config"]["tick_rate"] == 20
 
 
 def assert_static_clients_are_served(port: int) -> None:
@@ -235,7 +239,7 @@ def main() -> None:
                         {"name": f"Agent {slot}"} for slot in range(PLAYER_COUNT)
                     ],
                     "max_steps": 4,
-                    "tick_rate": 5,
+                    "tick_rate": 20,
                     "player_connect_timeout_seconds": 1,
                     "seed": 1,
                 }
