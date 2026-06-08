@@ -1,6 +1,7 @@
 ## Ultra-Fast Direct Buffer Interface
 ## Zero-copy numpy buffer communication - no conversions
 
+import std/tables
 import vmath
 import ai
 import environment, external_actions
@@ -56,7 +57,13 @@ proc applyConfig(cfg: CEnvironmentConfig): EnvironmentConfig =
   applyFloat(deathPenalty, cfg.deathPenalty)
 
 var globalEnv: Environment = nil
-var coworldBuiltinAi: Controller = nil
+var environmentsByPtr = initTable[pointer, Environment]()
+var coworldBuiltinAiByEnv = initTable[pointer, Controller]()
+
+proc environmentFromPointer(env: pointer): Environment =
+  if env.isNil or env notin environmentsByPtr:
+    return nil
+  result = environmentsByPtr[env]
 
 const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   # Matches previous hardcoded RGB choices for renderer export.
@@ -96,9 +103,11 @@ proc tribal_village_create(): pointer {.exportc, dynlib.} =
   ## Create environment for direct buffer interface
   try:
     let config = defaultEnvironmentConfig()
-    globalEnv = newEnvironment(config)
-    initGlobalController(ExternalNN)
-    return cast[pointer](globalEnv)
+    let env = newEnvironment(config)
+    let envPtr = cast[pointer](env)
+    environmentsByPtr[envPtr] = env
+    globalEnv = env
+    return envPtr
   except:
     return nil
 
@@ -107,11 +116,11 @@ proc tribal_village_set_config(
   cfg: ptr CEnvironmentConfig
 ): int32 {.exportc, dynlib.} =
   ## Update runtime config (rewards, spawn rates, max steps) from Python.
-  if globalEnv == nil or cfg.isNil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or cfg.isNil:
     return 0
   try:
-    discard env
-    globalEnv.config = applyConfig(cfg[])
+    envObj.config = applyConfig(cfg[])
     return 1
   except:
     return 0
@@ -124,17 +133,18 @@ proc tribal_village_reset_and_get_obs(
   truncations_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
   ## Reset and write directly to buffers - no conversions
-  if globalEnv == nil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil:
     return 0
 
   try:
-    globalEnv.reset()
-    if not globalEnv.observationsInitialized:
-      globalEnv.rebuildObservations()
+    envObj.reset()
+    if not envObj.observationsInitialized:
+      envObj.rebuildObservations()
 
     # Direct memory copy of observations (zero conversion)
     let obs_size = MapAgents * ObservationLayers * ObservationWidth * ObservationHeight
-    copyMem(obs_buffer, globalEnv.observations.addr, obs_size)
+    copyMem(obs_buffer, envObj.observations.addr, obs_size)
 
     # Clear rewards/terminals/truncations
     for i in 0..<MapAgents:
@@ -153,12 +163,12 @@ proc tribal_village_reset_for_coworld(
   truncations_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
   ## Reset for Coworld runtime without exporting neural observation tensors.
-  if globalEnv == nil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil:
     return 0
 
   try:
-    discard env
-    globalEnv.reset()
+    envObj.reset()
     for i in 0..<MapAgents:
       rewards_buffer[i] = 0.0
       terminals_buffer[i] = 0
@@ -176,7 +186,8 @@ proc tribal_village_step_with_pointers(
   truncations_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
   ## Ultra-fast step with direct buffer access
-  if globalEnv == nil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil:
     return 0
 
   try:
@@ -186,21 +197,21 @@ proc tribal_village_step_with_pointers(
       actions[i] = actions_buffer[i]
 
     # Step environment
-    globalEnv.step(unsafeAddr actions)
+    envObj.step(unsafeAddr actions)
 
     # Direct memory copy of observations (zero conversion overhead)
     let obs_size = MapAgents * ObservationLayers * ObservationWidth * ObservationHeight
-    copyMem(obs_buffer, globalEnv.observations.addr, obs_size)
+    copyMem(obs_buffer, envObj.observations.addr, obs_size)
 
     # Direct buffer writes (no dict conversion)
     for i in 0..<MapAgents:
-      let agent = (if i < globalEnv.agents.len: globalEnv.agents[i] else: nil)
+      let agent = (if i < envObj.agents.len: envObj.agents[i] else: nil)
       let reward = if agent.isNil: 0.0'f32 else: agent.reward
       rewards_buffer[i] = reward
       if not agent.isNil:
         agent.reward = 0.0'f32
-      terminals_buffer[i] = if globalEnv.terminated[i] > 0.0: 1 else: 0
-      truncations_buffer[i] = if globalEnv.truncated[i] > 0.0: 1 else: 0
+      terminals_buffer[i] = if envObj.terminated[i] > 0.0: 1 else: 0
+      truncations_buffer[i] = if envObj.truncated[i] > 0.0: 1 else: 0
 
     return 1
   except:
@@ -214,35 +225,41 @@ proc tribal_village_step_for_coworld(
   truncations_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
   ## Step for Coworld runtime without copying observation tensors.
-  if globalEnv == nil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil:
     return 0
 
   try:
-    discard env
     var actions: array[MapAgents, uint8]
     for i in 0..<MapAgents:
       actions[i] = actions_buffer[i]
 
-    globalEnv.step(unsafeAddr actions)
+    envObj.step(unsafeAddr actions)
 
     for i in 0..<MapAgents:
-      let agent = (if i < globalEnv.agents.len: globalEnv.agents[i] else: nil)
+      let agent = (if i < envObj.agents.len: envObj.agents[i] else: nil)
       let reward = if agent.isNil: 0.0'f32 else: agent.reward
       rewards_buffer[i] = reward
       if not agent.isNil:
         agent.reward = 0.0'f32
-      terminals_buffer[i] = if globalEnv.terminated[i] > 0.0: 1 else: 0
-      truncations_buffer[i] = if globalEnv.truncated[i] > 0.0: 1 else: 0
+      terminals_buffer[i] = if envObj.terminated[i] > 0.0: 1 else: 0
+      truncations_buffer[i] = if envObj.truncated[i] > 0.0: 1 else: 0
 
     return 1
   except:
     return 0
 
-proc tribal_village_reset_builtin_ai(seed: int32): int32 {.exportc, dynlib.} =
+proc tribal_village_reset_builtin_ai(
+  env: pointer,
+  seed: int32
+): int32 {.exportc, dynlib.} =
   ## Reset the bundled scripted AI used by Coworld player containers.
+  let envObj = environmentFromPointer(env)
+  if envObj == nil:
+    return 0
   try:
     let controllerSeed = if seed > 0: seed.int else: 1
-    coworldBuiltinAi = newController(controllerSeed)
+    coworldBuiltinAiByEnv[env] = newController(controllerSeed)
     return 1
   except:
     return 0
@@ -252,14 +269,15 @@ proc tribal_village_builtin_ai_actions(
   actions_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
   ## Compute one full 48-agent action vector from the existing Nim AI.
-  if globalEnv == nil or actions_buffer.isNil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or actions_buffer.isNil:
     return 0
   try:
-    discard env
-    if coworldBuiltinAi == nil:
-      coworldBuiltinAi = newController(1)
+    if env notin coworldBuiltinAiByEnv:
+      coworldBuiltinAiByEnv[env] = newController(1)
+    let coworldBuiltinAi = coworldBuiltinAiByEnv[env]
     for i in 0..<MapAgents:
-      actions_buffer[i] = coworldBuiltinAi.decideAction(globalEnv, i)
+      actions_buffer[i] = coworldBuiltinAi.decideAction(envObj, i)
     coworldBuiltinAi.updateController()
     return 1
   except:
@@ -285,21 +303,21 @@ proc tribal_village_get_agent_x(
   env: pointer,
   agent_id: int32
 ): int32 {.exportc, dynlib.} =
-  discard env
   let idx = agent_id.int
-  if globalEnv == nil or idx < 0 or idx >= globalEnv.agents.len:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or idx < 0 or idx >= envObj.agents.len:
     return -1
-  return globalEnv.agents[idx].pos.x
+  return envObj.agents[idx].pos.x
 
 proc tribal_village_get_agent_y(
   env: pointer,
   agent_id: int32
 ): int32 {.exportc, dynlib.} =
-  discard env
   let idx = agent_id.int
-  if globalEnv == nil or idx < 0 or idx >= globalEnv.agents.len:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or idx < 0 or idx >= envObj.agents.len:
     return -1
-  return globalEnv.agents[idx].pos.y
+  return envObj.agents[idx].pos.y
 
 # Export compact Coworld cell state for sprite-based browser clients.
 proc tribal_village_export_world_cells(
@@ -307,8 +325,8 @@ proc tribal_village_export_world_cells(
   out_buffer: ptr UncheckedArray[uint8],
   out_len: int32
 ): int32 {.exportc, dynlib.} =
-  discard env
-  if globalEnv == nil or out_buffer.isNil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or out_buffer.isNil:
     return 0
 
   let required = MapWidth * MapHeight * CoworldCellStride
@@ -318,12 +336,12 @@ proc tribal_village_export_world_cells(
   for y in 0 ..< MapHeight:
     for x in 0 ..< MapWidth:
       let idx = (y * MapWidth + x) * CoworldCellStride
-      let tileColor = globalEnv.tileColors[x][y]
+      let tileColor = envObj.tileColors[x][y]
       let finalR = min(tileColor.r * tileColor.intensity, 1.5'f32)
       let finalG = min(tileColor.g * tileColor.intensity, 1.5'f32)
       let finalB = min(tileColor.b * tileColor.intensity, 1.5'f32)
 
-      out_buffer[idx] = ord(globalEnv.terrain[x][y]).uint8
+      out_buffer[idx] = ord(envObj.terrain[x][y]).uint8
       out_buffer[idx + 1] = toByte(finalR)
       out_buffer[idx + 2] = toByte(finalG)
       out_buffer[idx + 3] = toByte(finalB)
@@ -348,7 +366,7 @@ proc tribal_village_export_world_cells(
       out_buffer[idx + 22] = 0'u8
       out_buffer[idx + 23] = 0'u8
 
-      let thing = globalEnv.grid[x][y]
+      let thing = envObj.grid[x][y]
       if thing != nil:
         out_buffer[idx + 4] = ord(thing.kind).uint8
         out_buffer[idx + 5] = ord(thing.orientation).uint8
@@ -370,7 +388,7 @@ proc tribal_village_export_world_cells(
           flags = flags or 1'u8
         if thing.lanternHealthy:
           flags = flags or 2'u8
-        if globalEnv.actionTintCountdown[x][y] > 0:
+        if envObj.actionTintCountdown[x][y] > 0:
           flags = flags or 4'u8
         out_buffer[idx + 22] = flags
 
@@ -397,7 +415,8 @@ proc tribal_village_render_rgb(
   out_w: int32,
   out_h: int32
 ): int32 {.exportc, dynlib.} =
-  if globalEnv == nil or out_buffer.isNil:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or out_buffer.isNil:
     return 0
 
   let width = int(out_w)
@@ -416,11 +435,11 @@ proc tribal_village_render_rgb(
       for sy in 0 ..< scaleY:
         let rowBase = (y * scaleY + sy) * stride
         for x in 0 ..< MapWidth:
-          var rByte = toByte(globalEnv.tileColors[x][y].r)
-          var gByte = toByte(globalEnv.tileColors[x][y].g)
-          var bByte = toByte(globalEnv.tileColors[x][y].b)
+          var rByte = toByte(envObj.tileColors[x][y].r)
+          var gByte = toByte(envObj.tileColors[x][y].g)
+          var bByte = toByte(envObj.tileColors[x][y].b)
 
-          let thing = globalEnv.grid[x][y]
+          let thing = envObj.grid[x][y]
           if thing != nil:
             let tint = thingRenderColors[thing.kind]
             rByte = tint.r
@@ -441,8 +460,12 @@ proc tribal_village_get_obs_height(): int32 {.exportc, dynlib.} =
 
 proc tribal_village_destroy(env: pointer) {.exportc, dynlib.} =
   ## Clean up environment
-  coworldBuiltinAi = nil
-  globalEnv = nil
+  if env in coworldBuiltinAiByEnv:
+    coworldBuiltinAiByEnv.del(env)
+  if env in environmentsByPtr:
+    environmentsByPtr.del(env)
+  if globalEnv != nil and cast[pointer](globalEnv) == env:
+    globalEnv = nil
 
 # --- Rendering interface (ANSI) ---
 proc tribal_village_render_ansi(
@@ -452,11 +475,12 @@ proc tribal_village_render_ansi(
 ): int32 {.exportc, dynlib.} =
   ## Write an ANSI string render into out_buffer (null-terminated).
   ## Returns number of bytes written (excluding terminator). 0 on error.
-  if globalEnv == nil or out_buffer.isNil or buf_len <= 1:
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or out_buffer.isNil or buf_len <= 1:
     return 0
 
   try:
-    let s = render(globalEnv)  # environment.render*(env: Environment): string
+    let s = render(envObj)  # environment.render*(env: Environment): string
     let n = min(s.len, max(0, buf_len - 1).int)
     if n > 0:
       copyMem(out_buffer, cast[pointer](s.cstring), n)

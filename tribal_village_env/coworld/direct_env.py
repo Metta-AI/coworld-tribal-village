@@ -125,7 +125,11 @@ class CoworldTribalVillageEnv:
                 ],
                 ctypes.c_int32,
             ),
-            ("tribal_village_reset_builtin_ai", [ctypes.c_int32], ctypes.c_int32),
+            (
+                "tribal_village_reset_builtin_ai",
+                [ctypes.c_void_p, ctypes.c_int32],
+                ctypes.c_int32,
+            ),
             (
                 "tribal_village_builtin_ai_actions",
                 [ctypes.c_void_p, ctypes.c_void_p],
@@ -214,7 +218,10 @@ class CoworldTribalVillageEnv:
         self.step_count += 1
 
     def reset_builtin_ai(self, seed: int = 1) -> None:
-        ok = self.lib.tribal_village_reset_builtin_ai(ctypes.c_int32(max(1, seed)))
+        ok = self.lib.tribal_village_reset_builtin_ai(
+            self.env_ptr,
+            ctypes.c_int32(max(1, seed)),
+        )
         if ok != 1:
             raise RuntimeError("Failed to reset Nim built-in AI")
 

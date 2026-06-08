@@ -48,11 +48,16 @@ AGENTS_PER_TEAM = 6
 DEFAULT_MAX_STEPS = 2000
 DEFAULT_TICK_RATE = 20.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 180.0
+INITIAL_ACTION_TIMEOUT_SECONDS = 5.0
 REPLAY_SCHEMA_V1 = "tribal-village-replay-v1"
 REPLAY_SCHEMA_V2 = "tribal-village-replay-v2"
 MIN_REPLAY_SPEED = 0.25
 MAX_REPLAY_SPEED = 8.0
 DEFAULT_REPLAY_SPEED = 1.0
+CELL_OFFSET_THING = 4
+CELL_OFFSET_AGENT_ID = 6
+CELL_OFFSET_TEAM_ID = 7
+THING_AGENT = 0
 
 
 def read_data(uri: str) -> bytes:
@@ -216,6 +221,7 @@ class TribalVillageCoworld:
         self.latest_terminated = [False for _ in range(PLAYER_COUNT)]
         self.latest_truncated = [False for _ in range(PLAYER_COUNT)]
         self.actions = [0 for _ in range(PLAYER_COUNT)]
+        self.action_versions = [0 for _ in range(PLAYER_COUNT)]
         self.cumulative_scores = [0.0 for _ in range(PLAYER_COUNT)]
         self.action_log: list[list[int]] = []
         self.player_websockets: dict[int, list[WebSocket]] = {}
@@ -263,6 +269,7 @@ class TribalVillageCoworld:
                 action = _coerce_action(message)
                 async with self.lock:
                     self.actions[slot] = action
+                    self.action_versions[slot] += 1
         finally:
             async with self.lock:
                 sockets = self.player_websockets.get(slot)
@@ -292,6 +299,7 @@ class TribalVillageCoworld:
 
     async def _run_game(self) -> None:
         await asyncio.sleep(0.1)
+        await self._wait_for_initial_actions()
         while self.env.step_count < self.config.max_steps and not self.done:
             async with self.lock:
                 actions = self.actions.copy()
@@ -324,6 +332,18 @@ class TribalVillageCoworld:
         await self._broadcast_players(final=True)
         if server is not None:
             server.should_exit = True
+
+    async def _wait_for_initial_actions(self) -> None:
+        deadline = asyncio.get_running_loop().time() + INITIAL_ACTION_TIMEOUT_SECONDS
+        while True:
+            async with self.lock:
+                if all(
+                    self.action_versions[slot] > 0 for slot in self.connected_slots
+                ):
+                    return
+            if asyncio.get_running_loop().time() >= deadline:
+                return
+            await asyncio.sleep(0.001)
 
     def _step(self, actions: list[int]) -> None:
         self.env.step([int(action) for action in actions])
@@ -388,7 +408,7 @@ class TribalVillageCoworld:
             "scores": [float(score) for score in self.cumulative_scores],
             "team_scores": self.team_scores(),
             "player_names": self.config.player_names,
-            "agents": agent_snapshots(self.env, self.config.player_names),
+            "agents": [],
         }
 
     def team_scores(self) -> list[float]:
@@ -501,7 +521,7 @@ class TribalVillageReplay:
             "scores": self.results.get("scores", []),
             "team_scores": self.results.get("team_scores", []),
             "player_names": self.player_names,
-            "agents": agent_snapshots(env, self.player_names),
+            "agents": [],
         }
 
     async def receive_controls(
@@ -593,23 +613,34 @@ def decode_tick_deltas(raw_ticks: Any) -> list[list[int]]:
 
 
 def agent_snapshots(
-    env: CoworldTribalVillageEnv,
+    cell_bytes: bytes,
+    frame_meta: dict[str, Any],
     player_names: list[str],
 ) -> list[dict[str, Any]]:
     agents: list[dict[str, Any]] = []
-    for slot in range(PLAYER_COUNT):
-        x, y = env.agent_position(slot)
-        agents.append(
-            {
-                "slot": slot,
-                "name": (
-                    player_names[slot] if slot < len(player_names) else f"Agent {slot}"
-                ),
-                "team": slot // AGENTS_PER_TEAM,
-                "x": x,
-                "y": y,
-            }
-        )
+    width = int(frame_meta["width"])
+    height = int(frame_meta["height"])
+    stride = int(frame_meta["stride"])
+    for y in range(height):
+        for x in range(width):
+            idx = (y * width + x) * stride
+            if cell_bytes[idx + CELL_OFFSET_THING] != THING_AGENT:
+                continue
+            slot = int(cell_bytes[idx + CELL_OFFSET_AGENT_ID])
+            agents.append(
+                {
+                    "slot": slot,
+                    "name": (
+                        player_names[slot]
+                        if slot < len(player_names)
+                        else f"Agent {slot}"
+                    ),
+                    "team": int(cell_bytes[idx + CELL_OFFSET_TEAM_ID]),
+                    "x": x,
+                    "y": y,
+                }
+            )
+    agents.sort(key=lambda agent: int(agent["slot"]))
     return agents
 
 
@@ -621,6 +652,11 @@ async def send_sprite_snapshot(
     frame_meta, cell_bytes = env.sprite_frame()
     if frame_meta["kind"] != COWORLD_SPRITE_FRAME_KIND:
         raise RuntimeError("Coworld visual stream must use sprite-cell frames")
+    message["agents"] = agent_snapshots(
+        cell_bytes,
+        frame_meta,
+        cast(list[str], message["player_names"]),
+    )
     message["frame"] = {**frame_meta, "asset_base": "/assets"}
     await websocket.send_json(message)
     await websocket.send_bytes(cell_bytes)
