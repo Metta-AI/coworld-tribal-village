@@ -63,14 +63,11 @@ def _build_library(project_root: Path) -> Path:
             f"Failed to build Nim library (exit {result.returncode}). stdout: {stdout} stderr: {stderr}"
         )
 
-    for ext in (".dylib", ".dll", ".so"):
-        candidate = project_root / f"libtribal_village{ext}"
-        if candidate.exists():
-            return candidate
+    built_lib = project_root / _target_library_name()
+    if built_lib.exists():
+        return built_lib
 
-    raise RuntimeError(
-        "Build completed but libtribal_village.{so,dylib,dll} not found."
-    )
+    raise RuntimeError(f"Build completed but {built_lib.name} not found.")
 
 
 def ensure_nim_library_current(verbose: bool = True) -> Path:
