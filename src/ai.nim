@@ -358,6 +358,7 @@ proc findAttackOpportunity(env: Environment, agent: Thing): int =
 
 type NeedType = enum
   NeedArmor
+  NeedBread
 
 proc findNearestTeammateNeeding(env: Environment, me: Thing, need: NeedType): Thing =
   var best: Thing = nil
@@ -369,6 +370,8 @@ proc findNearestTeammateNeeding(env: Environment, me: Thing, need: NeedType): Th
     case need
     of NeedArmor:
       needs = other.inventoryArmor == 0
+    of NeedBread:
+      needs = other.inventoryBread < 1
     if not needs: continue
     let d = int(chebyshevDist(me.pos, other.pos))
     if d < bestDist:
@@ -630,7 +633,30 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
   case state.role:
 
   of Lighter:
-    # Priority 1: Plant lanterns outward in rings from home assembler
+    let teammateNeedingBread = findNearestTeammateNeeding(env, agent, NeedBread)
+
+    # Priority 1: Deliver bread after the team has enough lantern coverage.
+    if agent.inventoryBread > 0 and teammateNeedingBread != nil:
+      let dx = abs(teammateNeedingBread.pos.x - agent.pos.x)
+      let dy = abs(teammateNeedingBread.pos.y - agent.pos.y)
+      if max(dx, dy) == 1'i32:
+        return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammateNeedingBread.pos).uint8))
+      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammateNeedingBread.pos, controller.rng).uint8))
+
+    var teamLanterns = 0
+    for t in env.things:
+      if t.kind == PlantedLantern and t.teamId == getTeamId(agent.agentId) and t.lanternHealthy:
+        inc teamLanterns
+
+    if agent.inventoryLantern == 0 and teammateNeedingBread != nil and teamLanterns >= 3:
+      if agent.inventoryWheat > 0:
+        let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, ClayOven)
+        if did: return act
+      else:
+        let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
+        if did: return act
+
+    # Priority 2: Plant lanterns outward in rings from home assembler
     if agent.inventoryLantern > 0:
       # Determine home center (agent.homeassembler); if unset, use agent.pos
       let center = if agent.homeassembler.x >= 0: agent.homeassembler else: agent.pos
@@ -668,7 +694,7 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let awayFromCenter = getMoveAway(env, agent.pos, center, controller.rng)
       return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, awayFromCenter.uint8))
 
-    # Priority 2: If adjacent to an existing lantern without one to plant, push it further away
+    # Priority 3: If adjacent to an existing lantern without one to plant, push it further away
     elif isAdjacentToLantern(env, agent.pos):
       let near = findNearestLantern(env, agent.pos)
       if near.found and near.dist == 1'i32:
@@ -680,12 +706,12 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let step = agent.pos + ivec2((if dx != 0: dx div abs(dx) else: 0'i32), (if dy != 0: dy div abs(dy) else: 0'i32))
       return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, neighborDirIndex(agent.pos, step).uint8))
 
-    # Priority 3: Craft lantern if we have wheat
+    # Priority 4: Craft lantern if we have wheat
     if agent.inventoryWheat > 0:
       let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, WeavingLoom)
       if did: return act
 
-    # Priority 3: Collect wheat using spiral search
+    # Priority 5: Collect wheat using spiral search
     else:
       let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
       if did: return act
