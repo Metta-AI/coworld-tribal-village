@@ -9,4 +9,5 @@ sprite-cell stream served on `/global` for live games and `/replay` for replay g
 player runs the existing Nim role-based scripted AI in a deterministic local mirror and still sends actions through the
 `/player` route.
 
-Final scores are cumulative per-agent rewards, with team scores computed by summing each team's six agents.
+Final scores are cumulative per-agent rewards, with team scores computed by summing each team's six agents. Healthy
+planted lanterns provide ongoing team reward, so territory control is the primary durable scoring path.

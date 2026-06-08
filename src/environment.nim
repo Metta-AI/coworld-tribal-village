@@ -1775,7 +1775,7 @@ proc defaultEnvironmentConfig*(): EnvironmentConfig =
     # Combat configuration
     tumorSpawnRate: 0.1,
 
-    # Reward configuration (only arena_basic_easy_shaped rewards active)
+    # Reward configuration
     heartReward: 1.0,      # Arena: heart reward
     oreReward: 0.1,        # Arena: ore mining reward
     batteryReward: 0.8,    # Arena: battery crafting reward
@@ -1785,7 +1785,7 @@ proc defaultEnvironmentConfig*(): EnvironmentConfig =
     spearReward: 0.0,      # Disabled - not in arena
     armorReward: 0.0,      # Disabled - not in arena
     foodReward: 0.0,       # Disabled - not in arena
-    clothReward: 0.0,      # Disabled - not in arena
+    clothReward: 0.02,     # Team lantern territory reward per healthy lantern per tick
     tumorKillReward: 0.0, # Disabled - not in arena
     survivalPenalty: -0.01,
     deathPenalty: -5.0
@@ -2072,6 +2072,18 @@ proc step*(env: Environment, actions: ptr array[MapAgents, uint8]) =
     for agent in env.agents:
       if agent.frozen == 0:  # Only alive agents
         agent.reward += env.config.survivalPenalty
+
+  if env.config.clothReward != 0.0:
+    var healthyLanternsByTeam: array[MapRoomObjectsHouses, int]
+    for thing in env.things:
+      if thing.kind == PlantedLantern and thing.lanternHealthy and
+          thing.teamId >= 0 and thing.teamId < MapRoomObjectsHouses:
+        inc healthyLanternsByTeam[thing.teamId]
+    for agent in env.agents:
+      if env.terminated[agent.agentId] == 0.0 and agent.frozen == 0:
+        let teamId = getTeamId(agent.agentId)
+        agent.reward += (healthyLanternsByTeam[teamId].float32 * env.config.clothReward.float32) /
+          MapAgentsPerHouseFloat
 
   # Update heatmap using batch tint modification system
   # This is much more efficient than updating during each entity move
