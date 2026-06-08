@@ -39,8 +39,11 @@ CELL_OFFSET_ACTION_G = 24
 CELL_OFFSET_ACTION_B = 25
 ACTION_TINT_FLAG = 4
 THING_AGENT = 0
+THING_ASSEMBLER = 4
 THING_PLANTED_LANTERN = 11
 AGENTS_PER_TEAM = 6
+MAP_BORDER = 4
+MAX_START_ALTAR_EDGE_DISTANCE = 28
 
 
 def free_port() -> int:
@@ -254,6 +257,46 @@ def assert_coworld_envs_have_independent_builtin_ai() -> None:
         env_b.close()
 
 
+def assert_team_villages_start_on_outer_ring() -> None:
+    for seed in [1, 2, 3, 52, 448377852]:
+        env = CoworldTribalVillageEnv(max_steps=4, config={"seed": seed})
+        try:
+            env.reset()
+            frame, cells = env.sprite_frame()
+            altar_positions: list[tuple[int, int]] = []
+            for cell in range(frame["width"] * frame["height"]):
+                idx = cell * frame["stride"]
+                if cells[idx + CELL_OFFSET_THING] == THING_ASSEMBLER:
+                    altar_positions.append(
+                        (cell % frame["width"], cell // frame["width"])
+                    )
+
+            assert len(altar_positions) == PLAYER_COUNT // AGENTS_PER_TEAM
+            edge_distances = [
+                min(
+                    x - MAP_BORDER,
+                    y - MAP_BORDER,
+                    frame["width"] - MAP_BORDER - 1 - x,
+                    frame["height"] - MAP_BORDER - 1 - y,
+                )
+                for x, y in altar_positions
+            ]
+            max_x_span = max(x for x, _ in altar_positions) - min(
+                x for x, _ in altar_positions
+            )
+            max_y_span = max(y for _, y in altar_positions) - min(
+                y for _, y in altar_positions
+            )
+            edge_buffer = 2 * MAP_BORDER + 2 * MAX_START_ALTAR_EDGE_DISTANCE
+            min_x_span = frame["width"] - edge_buffer
+            min_y_span = frame["height"] - edge_buffer
+            assert max(edge_distances) <= MAX_START_ALTAR_EDGE_DISTANCE
+            assert max_x_span >= min_x_span
+            assert max_y_span >= min_y_span
+        finally:
+            env.close()
+
+
 def assert_action_tints_are_exported_as_sprite_state() -> None:
     env = CoworldTribalVillageEnv(max_steps=1000, config={"seed": 52})
     try:
@@ -443,6 +486,7 @@ def main() -> None:
             episode_seed = asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()
             assert_coworld_envs_have_independent_builtin_ai()
+            assert_team_villages_start_on_outer_ring()
             assert_action_tints_are_exported_as_sprite_state()
             assert_builtin_ai_builds_lantern_territory()
             process.wait(timeout=30)
