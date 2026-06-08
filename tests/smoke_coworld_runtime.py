@@ -110,10 +110,17 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
     ) as replay_ws:
         seen_done = False
         seen_loop = False
-        for _ in range(12):
+        seek_sent = False
+        seen_seek_reset = False
+        for _ in range(18):
             message, cell_bytes = await recv_world_frame(replay_ws)
             if message["tick"] == 1:
                 await replay_ws.send(json.dumps({"type": "speed", "speed": 4}))
+            if message["tick"] >= 2 and not seek_sent:
+                await replay_ws.send(json.dumps({"type": "seek", "tick": 0}))
+                seek_sent = True
+            elif seek_sent and message["tick"] == 0:
+                seen_seek_reset = True
             assert message["type"] == "replay"
             assert message["started"] is True
             assert message["frame"]["kind"] == SPRITE_FRAME_KIND
@@ -131,6 +138,7 @@ async def assert_replay_autoplays_and_loops(port: int) -> None:
             elif seen_done and message["tick"] == 0:
                 seen_loop = True
                 break
+        assert seen_seek_reset
         assert seen_done
         assert seen_loop
 
@@ -201,9 +209,12 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert 'id="status"' not in replay_html
     assert 'class="top-status"' not in replay_html
     assert "tilePanel" not in replay_html
+    assert 'data-replay="restart"' in replay_html
+    assert 'id="timeline"' in replay_html
     assert 'data-speed="slower"' in replay_html
     assert 'data-speed="faster"' in replay_html
     assert 'type: "speed"' in replay_html
+    assert 'type: "seek"' in replay_html
     assert "keydown" in replay_html
     manifest = json.loads((ROOT / "coworld_manifest_template.json").read_text())
     assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
