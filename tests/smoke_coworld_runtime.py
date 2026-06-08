@@ -186,7 +186,10 @@ def assert_client_websockets_are_proxy_relative() -> None:
         assert f"${{location.host}}{websocket_path}" not in html
     common_js = (client_dir / "view_common.js").read_text()
     assert f'const SPRITE_FRAME_KIND = "{SPRITE_FRAME_KIND}"' in common_js
-    assert "const MIN_TILE_SCALE = 1" in common_js
+    assert "const MIN_TILE_SCALE = 0.01" in common_js
+    assert "minTileScale()" in common_js
+    assert "clampView()" in common_js
+    assert "this.tileScale * factor, this.minTileScale(), MAX_TILE_SCALE" in common_js
     assert "strokeRect(rectX + 1, rectY + 1" in common_js
     assert "function routedHttpAddress" in common_js
     assert "function websocketAddress" in common_js

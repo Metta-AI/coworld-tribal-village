@@ -1,7 +1,7 @@
 "use strict";
 
 const TribalVillageView = (() => {
-  const MIN_TILE_SCALE = 1;
+  const MIN_TILE_SCALE = 0.01;
   const MAX_TILE_SCALE = 48;
   const NO_THING = 255;
   const SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1";
@@ -258,10 +258,11 @@ const TribalVillageView = (() => {
         event.preventDefault();
         const before = this.screenToWorld(event.offsetX, event.offsetY);
         const factor = event.deltaY < 0 ? 1.16 : 0.86;
-        this.tileScale = clamp(this.tileScale * factor, MIN_TILE_SCALE, MAX_TILE_SCALE);
+        this.tileScale = clamp(this.tileScale * factor, this.minTileScale(), MAX_TILE_SCALE);
         const after = this.screenToWorld(event.offsetX, event.offsetY);
         this.offsetX += (after.x - before.x) * this.tileScale;
         this.offsetY += (after.y - before.y) * this.tileScale;
+        this.clampView();
         this.draw();
       }, {passive: false});
       this.canvas.addEventListener("pointerdown", (event) => {
@@ -275,6 +276,7 @@ const TribalVillageView = (() => {
         if (this.dragging) {
           this.offsetX = this.dragOrigin.x + event.clientX - this.dragStart.x;
           this.offsetY = this.dragOrigin.y + event.clientY - this.dragStart.y;
+          this.clampView();
           this.draw();
           return;
         }
@@ -309,6 +311,7 @@ const TribalVillageView = (() => {
       void this.ensureAssets(assetBaseAddress(this.frame.asset_base));
       this.resizeCanvas();
       if (!this.hasFit) this.fitWorld();
+      else this.clampView();
       this.draw();
     }
 
@@ -333,11 +336,34 @@ const TribalVillageView = (() => {
 
     fitWorld() {
       if (!this.frame) return;
-      const size = this.cssSize();
-      this.tileScale = Math.max(MIN_TILE_SCALE, Math.min(size.width / this.frame.width, size.height / this.frame.height));
-      this.offsetX = (size.width - this.frame.width * this.tileScale) / 2;
-      this.offsetY = (size.height - this.frame.height * this.tileScale) / 2;
+      this.tileScale = this.minTileScale();
+      this.clampView();
       this.hasFit = true;
+    }
+
+    minTileScale() {
+      if (!this.frame) return MIN_TILE_SCALE;
+      const size = this.cssSize();
+      return Math.max(MIN_TILE_SCALE, Math.min(size.width / this.frame.width, size.height / this.frame.height));
+    }
+
+    clampView() {
+      if (!this.frame) return;
+      const size = this.cssSize();
+      const minScale = this.minTileScale();
+      this.tileScale = clamp(this.tileScale, minScale, MAX_TILE_SCALE);
+      const worldWidth = this.frame.width * this.tileScale;
+      const worldHeight = this.frame.height * this.tileScale;
+      if (worldWidth <= size.width) {
+        this.offsetX = (size.width - worldWidth) / 2;
+      } else {
+        this.offsetX = clamp(this.offsetX, size.width - worldWidth, 0);
+      }
+      if (worldHeight <= size.height) {
+        this.offsetY = (size.height - worldHeight) / 2;
+      } else {
+        this.offsetY = clamp(this.offsetY, size.height - worldHeight, 0);
+      }
     }
 
     screenToWorld(screenX, screenY) {
@@ -369,6 +395,7 @@ const TribalVillageView = (() => {
     draw() {
       if (!this.frame || !this.cells) return;
       this.resizeCanvas();
+      this.clampView();
       const ctx = this.ctx;
       const size = this.cssSize();
       ctx.clearRect(0, 0, size.width, size.height);
