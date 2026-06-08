@@ -81,7 +81,7 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   (r: 255'u8, g: 240'u8, b: 128'u8)   # PlantedLantern
 ]
 
-const CoworldCellStride* = 24
+const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
 
 proc toByte(value: float32): uint8 =
@@ -365,6 +365,19 @@ proc tribal_village_export_world_cells(
       out_buffer[idx + 21] = 0'u8
       out_buffer[idx + 22] = 0'u8
       out_buffer[idx + 23] = 0'u8
+      out_buffer[idx + 24] = 0'u8
+      out_buffer[idx + 25] = 0'u8
+      out_buffer[idx + 26] = 0'u8
+      out_buffer[idx + 27] = 0'u8
+
+      var flags = 0'u8
+      if envObj.actionTintCountdown[x][y] > 0:
+        let actionTint = envObj.actionTintColor[x][y]
+        flags = flags or 4'u8
+        out_buffer[idx + 23] = toByte(actionTint.r)
+        out_buffer[idx + 24] = toByte(actionTint.g)
+        out_buffer[idx + 25] = toByte(actionTint.b)
+        out_buffer[idx + 26] = toByte(actionTint.intensity)
 
       let thing = envObj.grid[x][y]
       if thing != nil:
@@ -383,14 +396,10 @@ proc tribal_village_export_world_cells(
         out_buffer[idx + 20] = toCountByte(thing.cooldown)
         out_buffer[idx + 21] = toCountByte(thing.frozen)
 
-        var flags = 0'u8
         if thing.hasClaimedTerritory:
           flags = flags or 1'u8
         if thing.lanternHealthy:
           flags = flags or 2'u8
-        if envObj.actionTintCountdown[x][y] > 0:
-          flags = flags or 4'u8
-        out_buffer[idx + 22] = flags
 
         if thing.kind == Agent:
           out_buffer[idx + 6] = toCountByte(thing.agentId)
@@ -406,6 +415,7 @@ proc tribal_village_export_world_cells(
           out_buffer[idx + 18] = toCountByte(thing.inventoryBread)
         elif thing.kind == PlantedLantern:
           out_buffer[idx + 7] = toCountByte(thing.teamId)
+      out_buffer[idx + 22] = flags
 
   return 1
 

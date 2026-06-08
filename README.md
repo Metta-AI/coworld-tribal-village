@@ -50,9 +50,10 @@ uv run coworld play tmp/tribal_village/coworld_manifest.json
 ```
 
 The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
-`COWORLD_PLAYER_WS_URL`, receive a rendered RGB window around their assigned agent, and send one discrete action in
-`0..63`. The bundled `default-ai-agent` player uses the existing Nim role-based scripted AI in a deterministic local
-mirror and still communicates through the normal `/player` WebSocket route.
+`COWORLD_PLAYER_WS_URL`, receive JSON action observations, and send one discrete action in `0..63`. Live and replay
+visuals use the canonical full-world sprite-cell stream on `/global` and `/replay`. The bundled `default-ai-agent`
+player uses the existing Nim role-based scripted AI in a deterministic local mirror and still communicates through the
+normal `/player` WebSocket route.
 
 Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay` autoplays, loops back to tick 0,
 draws `#slot name` labels above agents, and supports the standard faster/slower controls. Replay artifacts are compact

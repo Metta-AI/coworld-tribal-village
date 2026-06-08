@@ -4,7 +4,7 @@ const TribalVillageView = (() => {
   const MIN_TILE_SCALE = 0.01;
   const MAX_TILE_SCALE = 48;
   const NO_THING = 255;
-  const SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1";
+  const SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v2";
   const OFF = {
     terrain: 0,
     r: 1,
@@ -29,6 +29,10 @@ const TribalVillageView = (() => {
     cooldown: 20,
     frozen: 21,
     flags: 22,
+    actionR: 23,
+    actionG: 24,
+    actionB: 25,
+    actionIntensity: 26,
   };
 
   const THING = {
@@ -414,6 +418,7 @@ const TribalVillageView = (() => {
       this.drawFloor(ctx);
       this.drawTerrain(ctx);
       this.drawWalls(ctx);
+      this.drawActionTints(ctx);
       this.drawThings(ctx);
       this.drawGrid(ctx);
       ctx.restore();
@@ -440,10 +445,18 @@ const TribalVillageView = (() => {
           if (terrain === TERRAIN.wheat) drawSprite(ctx, this.assets["objects/wheat_field"], x, y);
           if (terrain === TERRAIN.tree) drawSprite(ctx, this.assets["objects/palm_tree"], x, y);
           if (terrain === TERRAIN.fertile) drawSprite(ctx, this.assets["objects/fertile"], x, y);
-          if ((this.cells[idx + OFF.flags] & 4) !== 0) {
-            ctx.fillStyle = "rgba(245, 82, 82, .42)";
-            ctx.fillRect(x, y, 1, 1);
-          }
+        }
+      }
+    }
+
+    drawActionTints(ctx) {
+      for (let y = 0; y < this.frame.height; y += 1) {
+        for (let x = 0; x < this.frame.width; x += 1) {
+          const idx = this.cellIndex(x, y);
+          if ((this.cells[idx + OFF.flags] & 4) === 0) continue;
+          const alpha = clamp(this.cells[idx + OFF.actionIntensity] / 255, 0, 1) || 1;
+          ctx.fillStyle = `rgba(${this.cells[idx + OFF.actionR]}, ${this.cells[idx + OFF.actionG]}, ${this.cells[idx + OFF.actionB]}, ${alpha})`;
+          ctx.fillRect(x, y, 1, 1);
         }
       }
     }

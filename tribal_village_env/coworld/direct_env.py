@@ -13,8 +13,8 @@ from tribal_village_env.build import ensure_nim_library_current
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
-COWORLD_SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1"
-CELL_STRIDE = 24
+COWORLD_SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v2"
+CELL_STRIDE = 28
 TERRAIN_LABELS = ["empty", "water", "bridge", "wheat", "tree", "fertile"]
 THING_LABELS = [
     "agent",
