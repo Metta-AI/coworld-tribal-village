@@ -6,12 +6,11 @@ import vmath
 import environment, common
 
 type
-  # Simple agent roles - one per team member
+  # Simple agent roles - six agents per team
   AgentRole* = enum
     Hearter    # Handles assembler/battery workflow
     Armorer    # Wood -> Armor
-    Hunter     # Wood -> Spear -> Hunt Tumors
-    Baker      # Wheat -> Bread
+    Hunter     # Wood -> Spear -> Hunt Tumors (two per team)
     Lighter    # Wheat -> Lantern -> Plant
     Farmer     # Creates fertile ground and plants wheat/trees
 
@@ -359,7 +358,6 @@ proc findAttackOpportunity(env: Environment, agent: Thing): int =
 
 type NeedType = enum
   NeedArmor
-  NeedBread
 
 proc findNearestTeammateNeeding(env: Environment, me: Thing, need: NeedType): Thing =
   var best: Thing = nil
@@ -371,8 +369,6 @@ proc findNearestTeammateNeeding(env: Environment, me: Thing, need: NeedType): Th
     case need
     of NeedArmor:
       needs = other.inventoryArmor == 0
-    of NeedBread:
-      needs = other.inventoryBread < 1
     if not needs: continue
     let d = int(chebyshevDist(me.pos, other.pos))
     if d < bestDist:
@@ -515,7 +511,7 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       of 0: Hearter
       of 1: Armorer
       of 2: Hunter
-      of 3: Baker
+      of 3: Hunter
       of 4: Lighter
       of 5: Farmer
       else: Hearter
@@ -791,28 +787,6 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
 
     # Step 4: If stocked but couldn't plant (no fertile nearby), roam to expand search
     return controller.moveNextSearch(env, agent, agentId, state)
-
-  of Baker:
-    # Priority 1: If carrying food, deliver to teammates needing it
-    if agent.inventoryBread > 0:
-      let teammate = findNearestTeammateNeeding(env, agent, NeedBread)
-      if teammate != nil:
-        let dx = abs(teammate.pos.x - agent.pos.x)
-        let dy = abs(teammate.pos.y - agent.pos.y)
-        if max(dx, dy) == 1'i32:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammate.pos).uint8))
-        else:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammate.pos, controller.rng).uint8))
-
-    # Priority 2: Craft bread if we have wheat
-    if agent.inventoryWheat > 0:
-      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, ClayOven)
-      if did: return act
-
-    # Priority 3: Collect wheat using spiral search
-    else:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
-      if did: return act
 
   of Hearter:
     # Handle ore → battery → assembler workflow
