@@ -24,9 +24,14 @@ from tribal_village_env.coworld.player import BuiltinAIPlayer
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_COUNT = 48
-SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v1"
+SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v2"
 DELAYED_FIRST_ACTION_SLOT = 47
 DELAYED_FIRST_ACTION = 11
+CELL_OFFSET_FLAGS = 22
+CELL_OFFSET_ACTION_R = 23
+CELL_OFFSET_ACTION_G = 24
+CELL_OFFSET_ACTION_B = 25
+ACTION_TINT_FLAG = 4
 
 
 def free_port() -> int:
@@ -210,6 +215,27 @@ def assert_coworld_envs_have_independent_builtin_ai() -> None:
         env_b.close()
 
 
+def assert_action_tints_are_exported_as_sprite_state() -> None:
+    env = CoworldTribalVillageEnv(max_steps=1000, config={"seed": 52})
+    try:
+        env.reset()
+        env.reset_builtin_ai(52)
+        for _ in range(1000):
+            env.step(env.builtin_ai_actions())
+            frame, cells = env.sprite_frame()
+            stride = frame["stride"]
+            for cell in range(frame["width"] * frame["height"]):
+                idx = cell * stride
+                if cells[idx + CELL_OFFSET_FLAGS] & ACTION_TINT_FLAG:
+                    assert cells[idx + CELL_OFFSET_ACTION_R] > 0
+                    assert cells[idx + CELL_OFFSET_ACTION_G] > 0
+                    assert cells[idx + CELL_OFFSET_ACTION_B] > 0
+                    return
+        raise AssertionError("built-in AI never produced an exported action tint")
+    finally:
+        env.close()
+
+
 def assert_client_websockets_are_proxy_relative() -> None:
     client_dir = ROOT / "tribal_village_env" / "coworld" / "clients"
     for client, websocket_path in {
@@ -343,6 +369,7 @@ def main() -> None:
             asyncio.run(assert_live_websockets(port))
             assert_builtin_ai_player_can_choose_action()
             assert_coworld_envs_have_independent_builtin_ai()
+            assert_action_tints_are_exported_as_sprite_state()
             process.wait(timeout=30)
             if process.returncode != 0:
                 stderr = process.stderr.read() if process.stderr else ""

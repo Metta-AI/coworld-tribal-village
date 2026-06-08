@@ -30,21 +30,22 @@ by one binary sprite-cell buffer for each rendered frame:
     {"slot": 0, "name": "Agent 0", "team": 0, "x": 23, "y": 17}
   ],
   "frame": {
-    "kind": "tribal-village-sprite-cells-v1",
+    "kind": "tribal-village-sprite-cells-v2",
     "encoding": "uint8-arraybuffer",
     "width": 196,
     "height": 112,
-    "stride": 24,
+    "stride": 28,
     "asset_base": "/assets"
   }
 }
 ```
 
 The binary payload is a row-major `Uint8Array` with `width * height * stride`
-bytes. Each 24-byte sprite cell contains terrain, tile tint, object kind,
+bytes. Each 28-byte sprite cell contains terrain, tile tint, object kind,
 orientation, agent/team ids, health, inventory counts, building counts,
-cooldown/frozen state, and flags. Browser clients render the real sprite map by
-loading assets from `/assets/...` and shared code from
+cooldown/frozen state, flags, and the engine's current action-tint
+RGB/intensity bytes. Browser clients render the real sprite map by loading
+assets from `/assets/...` and shared code from
 `/client/common/view_common.js`.
 
 Replay snapshots use `"type": "replay"` and loop to tick 0 after the recorded
