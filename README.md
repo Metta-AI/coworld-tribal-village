@@ -33,11 +33,6 @@ tribal-village play
 # Space toggles play/pause; when paused, press Space to step once
 ```
 
-4. Train integration status
-
-CoGames has been retired upstream in favor of Coworld. The legacy train command is disabled unless a compatible local
-training stack is present.
-
 ## Coworld
 
 Tribal Village now ships a Coworld package surface with 48 player slots, one slot per agent. Build and run it with the
@@ -152,7 +147,7 @@ Discrete 64 (`verb * 8 + argument`), where the argument is a direction (0..7):
 
 - Native shared library for Python: `nim c --app:lib ... src/tribal_village_interface.nim` (see Quick Start step 3)
 - Native desktop viewer: `nim r -d:release tribal_village.nim`
-- WebAssembly demo (requires Emscripten): command in `scripts/` section below; outputs `build/web/tribal_village.html`
+- WebAssembly demo (requires Emscripten): `nimble wasm`; outputs `build/web/tribal_village.html`
 
 ### PufferLib Rendering
 
@@ -171,6 +166,7 @@ Discrete 64 (`verb * 8 + argument`), where the argument is a direction (0..7):
 
 **Nim**: 2.2.10+ with boxy, windy, vmath, chroma (installed via `nimby sync -g nimby.lock`)
 
-**Python**: 3.12.x with numpy. Install `.[pufferlib]` only when using the legacy PufferLib training wrapper.
+**Python**: 3.12.x with numpy. Install `.[pufferlib]` to use the `TribalVillageEnv` wrapper (it subclasses
+`pufferlib.PufferEnv`), and `.[coworld]` to run the Coworld server locally.
 
 **System**: OpenGL for rendering
