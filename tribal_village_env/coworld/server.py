@@ -118,9 +118,11 @@ def write_data(
 
 def load_replay_payload(uri: str) -> dict[str, Any]:
     data = read_data(uri)
-    if uri.endswith(".json.z"):
+    # .z and .gz are storage envelopes around opaque replay bytes; the
+    # platform serves hosted replays as e.g. jobs/{job_id}/replay.z.
+    if uri.endswith(".z"):
         data = zlib.decompress(data)
-    elif uri.endswith(".json.gz"):
+    elif uri.endswith(".gz"):
         data = gzip.decompress(data)
     payload = json.loads(data.decode("utf-8"))
     if not isinstance(payload, dict):

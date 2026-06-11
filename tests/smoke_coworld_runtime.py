@@ -441,7 +441,7 @@ def main() -> None:
         config_path = tempdir / "config.json"
         results_path = tempdir / "results.json"
         replay_path = tempdir / "replay.json"
-        replay_z_path = tempdir / "replay.json.z"
+        replay_z_path = tempdir / "replay.z"
         config_path.write_text(
             json.dumps(
                 coworld_config_payload()
