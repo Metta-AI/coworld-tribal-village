@@ -12,11 +12,11 @@
 
 - Install Nim deps: `nimby sync -g nimby.lock`
 - Run standalone game: `nim r -d:release tribal_village.nim`
-- Build shared lib for Python (matches mettascope flow):
-  `nim c --app:lib --mm:arc --opt:speed -d:danger --out:libtribal_village.so src/tribal_village_interface.nim` then
-  place at `tribal_village_env/libtribal_village.so` (rename/symlink on macOS with `.dylib`).
+- Build shared lib for Python: `nimble buildLib`, or rely on `tribal_village_env/build.py`
+  (`ensure_nim_library_current`), which rebuilds when Nim sources change and copies the library to
+  `tribal_village_env/libtribal_village.{so,dylib,dll}`. The CLI and `pip install -e .` run it automatically.
 - Quick Python smoke test: `python -c "from tribal_village_env import TribalVillageEnv; TribalVillageEnv()"`
-- Editable install (after building the lib): `pip install -e .`
+- Editable install: `pip install -e .`
 
 ## Coding Style & Naming Conventions
 
@@ -27,10 +27,12 @@
 
 ## Testing Guidelines
 
-- No formal test suite yet. Add smoke tests before PRs:
+- Coworld runtime smoke test: `python tests/smoke_coworld_runtime.py` (exercises the server, builtin-AI player,
+  and replay paths end to end; silent with exit code 0 on success).
+- Manual smoke checks before PRs:
   - Nim: run `nim r tribal_village.nim` and verify basic interaction.
   - Python: instantiate `TribalVillageEnv()` and run a few `step`s.
-- If adding Python tests, place under `tests/` as `test_*.py` (pytest style).
+- If adding Python tests, place under `tests/` as `test_*.py` (pytest style) or standalone `smoke_*.py` scripts.
 
 ## Commit & Pull Request Guidelines
 
@@ -41,6 +43,7 @@
 
 ## Security & Configuration Tips
 
-- The Python wrapper loads `tribal_village_env/libtribal_village.so`; ensure the library exists and matches your
-  platform.
-- Requires Nim 2.2.4+ and OpenGL for rendering. Python: 3.9+ with `numpy`, `gymnasium`, `pufferlib`.
+- The Python wrapper loads `tribal_village_env/libtribal_village.{so,dylib,dll}`; ensure the library exists and
+  matches your platform (`tribal_village_env/build.py` rebuilds it when Nim sources change).
+- Requires Nim 2.2.10+ and OpenGL for rendering. Python: 3.12.x with `numpy`; install the `pufferlib` extra for
+  `TribalVillageEnv` and the `coworld` extra for the local server.

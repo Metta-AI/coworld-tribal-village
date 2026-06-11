@@ -45,9 +45,7 @@ class BuiltinAIPlayer:
 
 
 async def run_player() -> None:
-    url = os.environ.get("COWORLD_PLAYER_WS_URL") or os.environ.get(
-        "COGAMES_ENGINE_WS_URL"
-    )
+    url = os.environ.get("COWORLD_PLAYER_WS_URL")
     if not url:
         raise RuntimeError("COWORLD_PLAYER_WS_URL is required")
 
