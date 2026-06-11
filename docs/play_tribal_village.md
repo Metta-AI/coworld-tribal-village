@@ -5,7 +5,7 @@ Run a local episode with `coworld play coworld_manifest.json` or a headless smok
 `/client/player?slot=0&token=...` to inspect or control a slot, and `/client/replay` to view saved replay action logs.
 
 Player containers should connect to the exact `COWORLD_PLAYER_WS_URL` supplied by the runner and send JSON actions
-shaped as `{ "type": "action", "action": 0 }`. The packaged `default-ai-agent` player uses the same image and
+shaped as `{ "type": "action", "action": 0 }`. The packaged `villager` player is a native Nim binary that uses the same
 WebSocket route as tournament players.
 
 Replay mode autoplays, loops, draws `#slot name` labels above agents, and supports the standard faster/slower controls.
