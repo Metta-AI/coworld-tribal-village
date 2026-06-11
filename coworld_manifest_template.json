@@ -7,21 +7,33 @@
     "runnable": {
       "type": "game",
       "image": "{{TRIBAL_VILLAGE_IMAGE}}",
-      "run": ["python", "-m", "tribal_village_env.coworld.server"],
+      "run": [
+        "python",
+        "-m",
+        "tribal_village_env.coworld.server"
+      ],
       "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main"
     },
     "config_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "additionalProperties": false,
-      "required": ["tokens", "players", "max_steps", "tick_rate"],
+      "required": [
+        "tokens",
+        "players",
+        "max_steps",
+        "tick_rate"
+      ],
       "properties": {
         "tokens": {
           "description": "One connection token per Tribal Village agent slot.",
           "type": "array",
           "minItems": 48,
           "maxItems": 48,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "players": {
           "description": "One player display-name object per agent slot.",
@@ -31,9 +43,14 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name"],
+            "required": [
+              "name"
+            ],
             "properties": {
-              "name": {"type": "string", "minLength": 1}
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -67,21 +84,30 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "additionalProperties": false,
-      "required": ["scores", "team_scores", "ticks", "truncation_reason"],
+      "required": [
+        "scores",
+        "team_scores",
+        "ticks",
+        "truncation_reason"
+      ],
       "properties": {
         "scores": {
           "description": "One cumulative reward score per agent slot.",
           "type": "array",
           "minItems": 48,
           "maxItems": 48,
-          "items": {"type": "number"}
+          "items": {
+            "type": "number"
+          }
         },
         "team_scores": {
           "description": "Eight team scores, each summing the six agent scores for that village.",
           "type": "array",
           "minItems": 8,
           "maxItems": 8,
-          "items": {"type": "number"}
+          "items": {
+            "type": "number"
+          }
         },
         "ticks": {
           "type": "integer",
@@ -129,13 +155,15 @@
   },
   "player": [
     {
-      "id": "default-ai-agent",
-      "name": "Default Scripted AI",
+      "id": "villager",
+      "name": "Villager Scripted AI",
       "type": "player",
-      "image": "{{TRIBAL_VILLAGE_IMAGE}}",
-      "run": ["python", "-m", "tribal_village_env.coworld.player"],
-      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/blob/main/tribal_village_env/coworld/player.py",
-      "description": "Bundled player that runs the existing Nim role-based scripted AI through the Coworld player WebSocket."
+      "image": "{{TRIBAL_VILLAGE_PLAYER_IMAGE}}",
+      "run": [
+        "/bin/villager"
+      ],
+      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main/players/villager",
+      "description": "Bundled native Nim player that mirrors the episode deterministically and replays the built-in role-based scripted AI through the Coworld player WebSocket."
     }
   ],
   "reporter": [],
@@ -162,54 +190,150 @@
         "tick_rate": 20,
         "player_connect_timeout_seconds": 180,
         "players": [
-          {"name": "Agent 0"},
-          {"name": "Agent 1"},
-          {"name": "Agent 2"},
-          {"name": "Agent 3"},
-          {"name": "Agent 4"},
-          {"name": "Agent 5"},
-          {"name": "Agent 6"},
-          {"name": "Agent 7"},
-          {"name": "Agent 8"},
-          {"name": "Agent 9"},
-          {"name": "Agent 10"},
-          {"name": "Agent 11"},
-          {"name": "Agent 12"},
-          {"name": "Agent 13"},
-          {"name": "Agent 14"},
-          {"name": "Agent 15"},
-          {"name": "Agent 16"},
-          {"name": "Agent 17"},
-          {"name": "Agent 18"},
-          {"name": "Agent 19"},
-          {"name": "Agent 20"},
-          {"name": "Agent 21"},
-          {"name": "Agent 22"},
-          {"name": "Agent 23"},
-          {"name": "Agent 24"},
-          {"name": "Agent 25"},
-          {"name": "Agent 26"},
-          {"name": "Agent 27"},
-          {"name": "Agent 28"},
-          {"name": "Agent 29"},
-          {"name": "Agent 30"},
-          {"name": "Agent 31"},
-          {"name": "Agent 32"},
-          {"name": "Agent 33"},
-          {"name": "Agent 34"},
-          {"name": "Agent 35"},
-          {"name": "Agent 36"},
-          {"name": "Agent 37"},
-          {"name": "Agent 38"},
-          {"name": "Agent 39"},
-          {"name": "Agent 40"},
-          {"name": "Agent 41"},
-          {"name": "Agent 42"},
-          {"name": "Agent 43"},
-          {"name": "Agent 44"},
-          {"name": "Agent 45"},
-          {"name": "Agent 46"},
-          {"name": "Agent 47"}
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          },
+          {
+            "name": "Agent 18"
+          },
+          {
+            "name": "Agent 19"
+          },
+          {
+            "name": "Agent 20"
+          },
+          {
+            "name": "Agent 21"
+          },
+          {
+            "name": "Agent 22"
+          },
+          {
+            "name": "Agent 23"
+          },
+          {
+            "name": "Agent 24"
+          },
+          {
+            "name": "Agent 25"
+          },
+          {
+            "name": "Agent 26"
+          },
+          {
+            "name": "Agent 27"
+          },
+          {
+            "name": "Agent 28"
+          },
+          {
+            "name": "Agent 29"
+          },
+          {
+            "name": "Agent 30"
+          },
+          {
+            "name": "Agent 31"
+          },
+          {
+            "name": "Agent 32"
+          },
+          {
+            "name": "Agent 33"
+          },
+          {
+            "name": "Agent 34"
+          },
+          {
+            "name": "Agent 35"
+          },
+          {
+            "name": "Agent 36"
+          },
+          {
+            "name": "Agent 37"
+          },
+          {
+            "name": "Agent 38"
+          },
+          {
+            "name": "Agent 39"
+          },
+          {
+            "name": "Agent 40"
+          },
+          {
+            "name": "Agent 41"
+          },
+          {
+            "name": "Agent 42"
+          },
+          {
+            "name": "Agent 43"
+          },
+          {
+            "name": "Agent 44"
+          },
+          {
+            "name": "Agent 45"
+          },
+          {
+            "name": "Agent 46"
+          },
+          {
+            "name": "Agent 47"
+          }
         ]
       }
     }
@@ -220,105 +344,297 @@
       "tick_rate": 20,
       "player_connect_timeout_seconds": 180,
       "players": [
-        {"name": "Agent 0"},
-        {"name": "Agent 1"},
-        {"name": "Agent 2"},
-        {"name": "Agent 3"},
-        {"name": "Agent 4"},
-        {"name": "Agent 5"},
-        {"name": "Agent 6"},
-        {"name": "Agent 7"},
-        {"name": "Agent 8"},
-        {"name": "Agent 9"},
-        {"name": "Agent 10"},
-        {"name": "Agent 11"},
-        {"name": "Agent 12"},
-        {"name": "Agent 13"},
-        {"name": "Agent 14"},
-        {"name": "Agent 15"},
-        {"name": "Agent 16"},
-        {"name": "Agent 17"},
-        {"name": "Agent 18"},
-        {"name": "Agent 19"},
-        {"name": "Agent 20"},
-        {"name": "Agent 21"},
-        {"name": "Agent 22"},
-        {"name": "Agent 23"},
-        {"name": "Agent 24"},
-        {"name": "Agent 25"},
-        {"name": "Agent 26"},
-        {"name": "Agent 27"},
-        {"name": "Agent 28"},
-        {"name": "Agent 29"},
-        {"name": "Agent 30"},
-        {"name": "Agent 31"},
-        {"name": "Agent 32"},
-        {"name": "Agent 33"},
-        {"name": "Agent 34"},
-        {"name": "Agent 35"},
-        {"name": "Agent 36"},
-        {"name": "Agent 37"},
-        {"name": "Agent 38"},
-        {"name": "Agent 39"},
-        {"name": "Agent 40"},
-        {"name": "Agent 41"},
-        {"name": "Agent 42"},
-        {"name": "Agent 43"},
-        {"name": "Agent 44"},
-        {"name": "Agent 45"},
-        {"name": "Agent 46"},
-        {"name": "Agent 47"}
+        {
+          "name": "Agent 0"
+        },
+        {
+          "name": "Agent 1"
+        },
+        {
+          "name": "Agent 2"
+        },
+        {
+          "name": "Agent 3"
+        },
+        {
+          "name": "Agent 4"
+        },
+        {
+          "name": "Agent 5"
+        },
+        {
+          "name": "Agent 6"
+        },
+        {
+          "name": "Agent 7"
+        },
+        {
+          "name": "Agent 8"
+        },
+        {
+          "name": "Agent 9"
+        },
+        {
+          "name": "Agent 10"
+        },
+        {
+          "name": "Agent 11"
+        },
+        {
+          "name": "Agent 12"
+        },
+        {
+          "name": "Agent 13"
+        },
+        {
+          "name": "Agent 14"
+        },
+        {
+          "name": "Agent 15"
+        },
+        {
+          "name": "Agent 16"
+        },
+        {
+          "name": "Agent 17"
+        },
+        {
+          "name": "Agent 18"
+        },
+        {
+          "name": "Agent 19"
+        },
+        {
+          "name": "Agent 20"
+        },
+        {
+          "name": "Agent 21"
+        },
+        {
+          "name": "Agent 22"
+        },
+        {
+          "name": "Agent 23"
+        },
+        {
+          "name": "Agent 24"
+        },
+        {
+          "name": "Agent 25"
+        },
+        {
+          "name": "Agent 26"
+        },
+        {
+          "name": "Agent 27"
+        },
+        {
+          "name": "Agent 28"
+        },
+        {
+          "name": "Agent 29"
+        },
+        {
+          "name": "Agent 30"
+        },
+        {
+          "name": "Agent 31"
+        },
+        {
+          "name": "Agent 32"
+        },
+        {
+          "name": "Agent 33"
+        },
+        {
+          "name": "Agent 34"
+        },
+        {
+          "name": "Agent 35"
+        },
+        {
+          "name": "Agent 36"
+        },
+        {
+          "name": "Agent 37"
+        },
+        {
+          "name": "Agent 38"
+        },
+        {
+          "name": "Agent 39"
+        },
+        {
+          "name": "Agent 40"
+        },
+        {
+          "name": "Agent 41"
+        },
+        {
+          "name": "Agent 42"
+        },
+        {
+          "name": "Agent 43"
+        },
+        {
+          "name": "Agent 44"
+        },
+        {
+          "name": "Agent 45"
+        },
+        {
+          "name": "Agent 46"
+        },
+        {
+          "name": "Agent 47"
+        }
       ]
     },
     "players": [
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"},
-      {"player_id": "default-ai-agent"}
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      },
+      {
+        "player_id": "villager"
+      }
     ]
   }
 }

@@ -1,0 +1,7 @@
+{
+  "author": "richard@relh.net",
+  "name": "villager",
+  "image_uri": "coworld-tribal-village-player:latest",
+  "run": ["/bin/villager"],
+  "games": ["tribal_village"]
+}

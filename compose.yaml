@@ -4,6 +4,12 @@ services:
     platform: linux/amd64
     build:
       context: .
+  tribal-village-player:
+    image: coworld-tribal-village-player:latest
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: players/villager/Dockerfile
   commissioner:
     image: ghcr.io/metta-ai/commissioners-baseline@sha256:02a19be80fa07b3005b443fa5dddd4f4829f3e984cbd5fcea356e84deb014542
     platform: linux/amd64
