@@ -8,10 +8,10 @@ import environment, common
 type
   # Simple agent roles - six agents per team
   AgentRole* = enum
-    Hearter    # Handles assembler/battery workflow
-    Armorer    # Wood -> Armor
-    Hunter     # Wood -> Spear -> Hunt Tumors (two per team)
-    Lighter    # Wheat -> Lantern -> Plant
+    Hearter    # Handles assembler/battery workflow (currently unassigned)
+    Armorer    # Wood -> Armor (currently unassigned)
+    Hunter     # Wood -> Spear -> Hunt Tumors (one per team)
+    Lighter    # Wheat -> Lantern -> Plant (four per team)
     Farmer     # Creates fertile ground and plants wheat/trees
 
   # Minimal state tracking with spiral search
@@ -510,11 +510,16 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
 
   # Initialize agent role if needed (per-house pattern, 6 agents per house)
   if agentId notin controller.agents:
+    # Score is territory: healthy planted lanterns pay per tick, so most of
+    # the team plants. One hunter keeps tumor creep off the buildings and the
+    # farmer sustains the wheat supply. No slot banks respawn hearts - eval
+    # shows lantern throughput from a fourth Lighter outscores the respawns
+    # the initial 5 assembler hearts already cover (1030 vs 947 team-mean).
     let role = case agentId mod MapAgentsPerHouse:  # MapAgentsPerHouse = 6
-      of 0: Hearter
-      of 1: Armorer
+      of 0: Lighter
+      of 1: Lighter
       of 2: Hunter
-      of 3: Hunter
+      of 3: Lighter
       of 4: Lighter
       of 5: Farmer
       else: Hearter
@@ -594,8 +599,9 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     state.escapeMode = false
     state.stuckCounter = 0
 
-  # Small dithering chance to break deadlocks (higher for non-assembler roles)
-  let ditherChance = if state.role == Hearter: 0.10 else: 0.20
+  # Small dithering chance to break deadlocks. Kept low: dithered steps cost
+  # lantern-planting throughput, the dominant score term.
+  let ditherChance = if state.role == Hearter: 0.10 else: 0.05
   if randFloat(controller.rng) < ditherChance:
     var candidates = @[ivec2(0, -1), ivec2(1, 0), ivec2(0, 1), ivec2(-1, 0),
                        ivec2(1, -1), ivec2(1, 1), ivec2(-1, 1), ivec2(-1, -1)]
@@ -645,7 +651,7 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
           continue
         var spaced = true
         for t in env.things:
-          if t.kind == PlantedLantern and chebyshevDist(target, t.pos) < 3'i32:
+          if t.kind == PlantedLantern and chebyshevDist(target, t.pos) < 2'i32:
             spaced = false
             break
         if spaced:
