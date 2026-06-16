@@ -17,6 +17,8 @@ import pufferlib
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
+TRAINING_AGENT_STRIDE = 13
+TRAINING_OBJECT_STRIDE = 5
 
 
 class NimConfig(ctypes.Structure):
@@ -129,6 +131,14 @@ class TribalVillageEnv(pufferlib.PufferEnv):
 
         # Only allocate actions buffer (input to environment)
         self.actions_buffer = np.zeros(self.total_agents, dtype=np.uint8)
+        self.training_agent_buffer = np.zeros(
+            self.total_agents * TRAINING_AGENT_STRIDE, dtype=np.int32
+        )
+        self.training_object_buffer = np.zeros(
+            self.map_width * self.map_height * TRAINING_OBJECT_STRIDE,
+            dtype=np.int32,
+        )
+        self.training_object_count = np.zeros(1, dtype=np.int32)
 
         # Initialize environment
         self.env_ptr = self.lib.tribal_village_create()
@@ -243,6 +253,19 @@ class TribalVillageEnv(pufferlib.PufferEnv):
                 [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32],
                 ctypes.c_int32,
                 True,
+            ),
+            (
+                "tribal_village_export_training_state",
+                [
+                    ctypes.c_void_p,
+                    ctypes.c_void_p,
+                    ctypes.c_int32,
+                    ctypes.c_void_p,
+                    ctypes.c_int32,
+                    ctypes.c_void_p,
+                ],
+                ctypes.c_int32,
+                False,
             ),
         ]
 
@@ -371,6 +394,27 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         infos = {f"agent_{i}": {} for i in range(self.num_agents)}
 
         return observations, rewards, terminated, truncated, infos
+
+    def export_training_state(self) -> tuple[np.ndarray, np.ndarray]:
+        """Export compact trainer state for reward shaping."""
+        success = self.lib.tribal_village_export_training_state(
+            self.env_ptr,
+            self.training_agent_buffer.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int32(self.training_agent_buffer.size),
+            self.training_object_buffer.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int32(self.training_object_buffer.size),
+            self.training_object_count.ctypes.data_as(ctypes.c_void_p),
+        )
+        if not success:
+            raise RuntimeError("Failed to export Nim training state")
+        object_count = int(self.training_object_count[0])
+        agents = self.training_agent_buffer.reshape(
+            self.total_agents, TRAINING_AGENT_STRIDE
+        )
+        objects = self.training_object_buffer[
+            : object_count * TRAINING_OBJECT_STRIDE
+        ].reshape(object_count, TRAINING_OBJECT_STRIDE)
+        return agents, objects
 
     def close(self):
         """Clean up the environment."""

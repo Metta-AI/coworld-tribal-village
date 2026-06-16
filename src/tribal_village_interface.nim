@@ -83,6 +83,8 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
 
 const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
+const TrainingAgentStride* = 13
+const TrainingObjectStride* = 5
 
 proc toByte(value: float32): uint8 =
   var iv = int(value * 255.0)
@@ -299,6 +301,12 @@ proc tribal_village_get_map_width(): int32 {.exportc, dynlib.} =
 proc tribal_village_get_map_height(): int32 {.exportc, dynlib.} =
   return MapHeight.int32
 
+proc tribal_village_get_training_agent_stride(): int32 {.exportc, dynlib.} =
+  return TrainingAgentStride.int32
+
+proc tribal_village_get_training_object_stride(): int32 {.exportc, dynlib.} =
+  return TrainingObjectStride.int32
+
 proc tribal_village_get_agent_x(
   env: pointer,
   agent_id: int32
@@ -418,6 +426,99 @@ proc tribal_village_export_world_cells(
       out_buffer[idx + 22] = flags
 
   return 1
+
+proc tribal_village_export_training_state(
+  env: pointer,
+  agent_buffer: ptr UncheckedArray[int32],
+  agent_len: int32,
+  object_buffer: ptr UncheckedArray[int32],
+  object_len: int32,
+  object_count: ptr int32
+): int32 {.exportc, dynlib.} =
+  ## Export compact trainer state for reward shaping/profiling.
+  ##
+  ## Agent rows: x, y, alive, team, ore, battery, water, wheat, wood,
+  ## spear, lantern, armor, bread.
+  ## Object rows: kind, x, y, value, team.
+  ## - assembler value is hearts
+  ## - mine value is resources
+  ## - planted lantern value is 1 when healthy, team is lantern team id
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or agent_buffer.isNil or object_buffer.isNil or object_count.isNil:
+    return 0
+
+  let requiredAgentLen = MapAgents * TrainingAgentStride
+  if agent_len.int < requiredAgentLen:
+    return 0
+  if object_len.int < TrainingObjectStride:
+    return 0
+
+  try:
+    for i in 0 ..< requiredAgentLen:
+      agent_buffer[i] = 0'i32
+    for agentId in 0 ..< MapAgents:
+      let base = agentId * TrainingAgentStride
+      agent_buffer[base] = -1'i32
+      agent_buffer[base + 1] = -1'i32
+      agent_buffer[base + 2] = 0'i32
+      agent_buffer[base + 3] = -1'i32
+
+    for agent in envObj.agents:
+      if agent == nil:
+        continue
+      let agentId = agent.agentId
+      if agentId < 0 or agentId >= MapAgents:
+        continue
+      let base = agentId * TrainingAgentStride
+      agent_buffer[base] = agent.pos.x.int32
+      agent_buffer[base + 1] = agent.pos.y.int32
+      agent_buffer[base + 2] = 1'i32
+      agent_buffer[base + 3] = getTeamId(agentId).int32
+      agent_buffer[base + 4] = agent.inventoryOre.int32
+      agent_buffer[base + 5] = agent.inventoryBattery.int32
+      agent_buffer[base + 6] = agent.inventoryWater.int32
+      agent_buffer[base + 7] = agent.inventoryWheat.int32
+      agent_buffer[base + 8] = agent.inventoryWood.int32
+      agent_buffer[base + 9] = agent.inventorySpear.int32
+      agent_buffer[base + 10] = agent.inventoryLantern.int32
+      agent_buffer[base + 11] = agent.inventoryArmor.int32
+      agent_buffer[base + 12] = agent.inventoryBread.int32
+
+    var rows = 0
+    template addObject(kindValue: ThingKind, xValue: int32, yValue: int32, value: int32, team: int32) =
+      let base = rows * TrainingObjectStride
+      if base + TrainingObjectStride > object_len.int:
+        return 0
+      object_buffer[base] = ord(kindValue).int32
+      object_buffer[base + 1] = xValue
+      object_buffer[base + 2] = yValue
+      object_buffer[base + 3] = value
+      object_buffer[base + 4] = team
+      inc rows
+
+    for thing in envObj.things:
+      if thing == nil:
+        continue
+      case thing.kind
+      of Mine:
+        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, thing.resources.int32, 0'i32)
+      of Converter, assembler, Spawner, Tumor:
+        let value =
+          if thing.kind == assembler:
+            thing.hearts.int32
+          else:
+            0'i32
+        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, value, 0'i32)
+      of PlantedLantern:
+        let healthy = if thing.lanternHealthy: 1'i32 else: 0'i32
+        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, healthy, thing.teamId.int32)
+      else:
+        discard
+
+    object_count[] = rows.int32
+    return 1
+  except:
+    return 0
 
 proc tribal_village_render_rgb(
   env: pointer,
