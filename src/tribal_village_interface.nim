@@ -83,7 +83,7 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
 
 const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
-const TrainingAgentStride* = 13
+const TrainingAgentStride* = 22
 const TrainingObjectStride* = 5
 
 proc toByte(value: float32): uint8 =
@@ -438,7 +438,9 @@ proc tribal_village_export_training_state(
   ## Export compact trainer state for reward shaping/profiling.
   ##
   ## Agent rows: x, y, alive, team, ore, battery, water, wheat, wood,
-  ## spear, lantern, armor, bread.
+  ## spear, lantern, armor, bread, action_invalid, action_noop, action_move,
+  ## action_attack, action_use, action_swap, action_put, action_plant,
+  ## action_plant_resource.
   ## Object rows: kind, x, y, value, team.
   ## - assembler value is hearts
   ## - mine value is resources
@@ -483,6 +485,17 @@ proc tribal_village_export_training_state(
       agent_buffer[base + 10] = agent.inventoryLantern.int32
       agent_buffer[base + 11] = agent.inventoryArmor.int32
       agent_buffer[base + 12] = agent.inventoryBread.int32
+      if agentId < envObj.stats.len:
+        let stats = envObj.stats[agentId]
+        agent_buffer[base + 13] = stats.actionInvalid.int32
+        agent_buffer[base + 14] = stats.actionNoop.int32
+        agent_buffer[base + 15] = stats.actionMove.int32
+        agent_buffer[base + 16] = stats.actionAttack.int32
+        agent_buffer[base + 17] = stats.actionUse.int32
+        agent_buffer[base + 18] = stats.actionSwap.int32
+        agent_buffer[base + 19] = stats.actionPut.int32
+        agent_buffer[base + 20] = stats.actionPlant.int32
+        agent_buffer[base + 21] = stats.actionPlantResource.int32
 
     var rows = 0
     template addObject(kindValue: ThingKind, xValue: int32, yValue: int32, value: int32, team: int32) =
