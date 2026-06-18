@@ -17,8 +17,20 @@ import pufferlib
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
-TRAINING_AGENT_STRIDE = 13
+TRAINING_AGENT_STRIDE = 22
 TRAINING_OBJECT_STRIDE = 5
+TRAINING_AGENT_ACTION_STAT_OFFSET = 13
+TRAINING_AGENT_ACTION_STAT_NAMES = (
+    "action_invalid",
+    "action_noop",
+    "action_move",
+    "action_attack",
+    "action_use",
+    "action_swap",
+    "action_put",
+    "action_plant",
+    "action_plant_resource",
+)
 
 
 class NimConfig(ctypes.Structure):
