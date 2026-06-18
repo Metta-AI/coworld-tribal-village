@@ -85,6 +85,10 @@ const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
 const TrainingAgentStride* = 22
 const TrainingObjectStride* = 5
+const TrainingKindTerrainWater* = 100'i32
+const TrainingKindTerrainWheat* = 101'i32
+const TrainingKindTerrainTree* = 102'i32
+const TrainingKindTerrainFertile* = 103'i32
 
 proc toByte(value: float32): uint8 =
   var iv = int(value * 255.0)
@@ -445,6 +449,8 @@ proc tribal_village_export_training_state(
   ## - assembler value is hearts
   ## - mine value is resources
   ## - planted lantern value is 1 when healthy, team is lantern team id
+  ## - terrain pseudo-kinds use 100=water, 101=wheat, 102=tree, 103=fertile;
+  ##   value is 1 when the tile is empty/passable for interaction
   let envObj = environmentFromPointer(env)
   if envObj == nil or agent_buffer.isNil or object_buffer.isNil or object_count.isNil:
     return 0
@@ -498,11 +504,11 @@ proc tribal_village_export_training_state(
         agent_buffer[base + 21] = stats.actionPlantResource.int32
 
     var rows = 0
-    template addObject(kindValue: ThingKind, xValue: int32, yValue: int32, value: int32, team: int32) =
+    template addObject(kindValue: int32, xValue: int32, yValue: int32, value: int32, team: int32) =
       let base = rows * TrainingObjectStride
       if base + TrainingObjectStride > object_len.int:
         return 0
-      object_buffer[base] = ord(kindValue).int32
+      object_buffer[base] = kindValue
       object_buffer[base + 1] = xValue
       object_buffer[base + 2] = yValue
       object_buffer[base + 3] = value
@@ -514,19 +520,35 @@ proc tribal_village_export_training_state(
         continue
       case thing.kind
       of Mine:
-        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, thing.resources.int32, 0'i32)
-      of Converter, assembler, Spawner, Tumor:
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, thing.resources.int32, 0'i32)
+      of Converter, assembler, Spawner, Tumor, Armory, Forge, ClayOven, WeavingLoom:
         let value =
           if thing.kind == assembler:
             thing.hearts.int32
           else:
             0'i32
-        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, value, 0'i32)
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, value, 0'i32)
       of PlantedLantern:
         let healthy = if thing.lanternHealthy: 1'i32 else: 0'i32
-        addObject(thing.kind, thing.pos.x.int32, thing.pos.y.int32, healthy, thing.teamId.int32)
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, healthy, thing.teamId.int32)
       else:
         discard
+
+    for x in 0 ..< MapWidth:
+      for y in 0 ..< MapHeight:
+        let pos = ivec2(x.int32, y.int32)
+        let empty = if envObj.isEmpty(pos): 1'i32 else: 0'i32
+        case envObj.terrain[x][y]
+        of Water:
+          addObject(TrainingKindTerrainWater, x.int32, y.int32, empty, 0'i32)
+        of Wheat:
+          addObject(TrainingKindTerrainWheat, x.int32, y.int32, empty, 0'i32)
+        of Tree:
+          addObject(TrainingKindTerrainTree, x.int32, y.int32, empty, 0'i32)
+        of Fertile:
+          addObject(TrainingKindTerrainFertile, x.int32, y.int32, empty, 0'i32)
+        else:
+          discard
 
     object_count[] = rows.int32
     return 1

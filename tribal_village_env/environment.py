@@ -147,7 +147,7 @@ class TribalVillageEnv(pufferlib.PufferEnv):
             self.total_agents * TRAINING_AGENT_STRIDE, dtype=np.int32
         )
         self.training_object_buffer = np.zeros(
-            self.map_width * self.map_height * TRAINING_OBJECT_STRIDE,
+            (self.map_width * self.map_height + 1024) * TRAINING_OBJECT_STRIDE,
             dtype=np.int32,
         )
         self.training_object_count = np.zeros(1, dtype=np.int32)
