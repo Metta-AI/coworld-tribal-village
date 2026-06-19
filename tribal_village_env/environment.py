@@ -143,6 +143,9 @@ class TribalVillageEnv(pufferlib.PufferEnv):
 
         # Only allocate actions buffer (input to environment)
         self.actions_buffer = np.zeros(self.total_agents, dtype=np.uint8)
+        self.valid_action_mask_buffer = np.zeros(
+            self.total_agents * ACTION_SPACE_SIZE, dtype=np.uint8
+        )
         self.training_agent_buffer = np.zeros(
             self.total_agents * TRAINING_AGENT_STRIDE, dtype=np.int32
         )
@@ -242,6 +245,12 @@ class TribalVillageEnv(pufferlib.PufferEnv):
                 False,
             ),
             ("tribal_village_destroy", [ctypes.c_void_p], None, False),
+            (
+                "tribal_village_valid_action_mask",
+                [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32],
+                ctypes.c_int32,
+                True,
+            ),
             ("tribal_village_get_num_agents", [], ctypes.c_int32, False),
             ("tribal_village_get_obs_layers", [], ctypes.c_int32, False),
             ("tribal_village_get_obs_width", [], ctypes.c_int32, False),
@@ -427,6 +436,23 @@ class TribalVillageEnv(pufferlib.PufferEnv):
             : object_count * TRAINING_OBJECT_STRIDE
         ].reshape(object_count, TRAINING_OBJECT_STRIDE)
         return agents, objects
+
+    def valid_action_mask(self) -> np.ndarray:
+        """Return an exact pre-step engine-valid mask with shape (agents, actions)."""
+        func = getattr(self.lib, "tribal_village_valid_action_mask", None)
+        if func is None:
+            raise AttributeError("Nim library does not export tribal_village_valid_action_mask")
+        success = func(
+            self.env_ptr,
+            self.valid_action_mask_buffer.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int32(self.valid_action_mask_buffer.size),
+        )
+        if not success:
+            raise RuntimeError("Failed to export valid action mask")
+        return self.valid_action_mask_buffer.reshape(
+            self.total_agents,
+            ACTION_SPACE_SIZE,
+        ).astype(bool, copy=True)
 
     def close(self):
         """Clean up the environment."""
