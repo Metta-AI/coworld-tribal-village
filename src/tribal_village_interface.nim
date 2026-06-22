@@ -289,6 +289,31 @@ proc tribal_village_builtin_ai_actions(
   except:
     return 0
 
+proc tribal_village_valid_action_mask(
+  env: pointer,
+  mask_buffer: ptr UncheckedArray[uint8],
+  mask_len: int32
+): int32 {.exportc, dynlib.} =
+  ## Export a pre-step validity mask for every agent and flat action id.
+  let envObj = environmentFromPointer(env)
+  if envObj == nil or mask_buffer.isNil:
+    return 0
+  let actionCount = ActionVerbCount * ActionArgumentCount
+  let required = MapAgents * actionCount
+  if mask_len.int < required:
+    return 0
+  try:
+    for i in 0 ..< required:
+      mask_buffer[i] = 0'u8
+    for agentId in 0 ..< MapAgents:
+      let base = agentId * actionCount
+      for action in 0 ..< actionCount:
+        if envObj.isActionValid(agentId, action.uint8):
+          mask_buffer[base + action] = 1'u8
+    return 1
+  except:
+    return 0
+
 proc tribal_village_get_num_agents(): int32 {.exportc, dynlib.} =
   return MapAgents.int32
 

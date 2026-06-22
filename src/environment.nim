@@ -501,6 +501,197 @@ proc isEmpty*(env: Environment, pos: IVec2): bool =
   return env.grid[pos.x][pos.y] == nil
 {.pop.}
 
+proc canRelocatePlantedLantern(env: Environment, blocker: Thing, delta: OrientationDelta): bool =
+  if blocker.isNil or blocker.kind != PlantedLantern:
+    return false
+
+  template spacingOk(candidate: IVec2): bool =
+    var ok = true
+    for t in env.things:
+      if t.kind == PlantedLantern and t != blocker:
+        let dist = max(abs(t.pos.x - candidate.x), abs(t.pos.y - candidate.y))
+        if dist < 3'i32:
+          ok = false
+          break
+    ok
+
+  template validRelocation(candidate: IVec2): bool =
+    isValidPos(candidate) and env.isEmpty(candidate) and
+      env.terrain[candidate.x][candidate.y] != Water and spacingOk(candidate)
+
+  let ahead1 = ivec2(blocker.pos.x + delta.x, blocker.pos.y + delta.y)
+  let ahead2 = ivec2(blocker.pos.x + delta.x * 2, blocker.pos.y + delta.y * 2)
+  if validRelocation(ahead2) or validRelocation(ahead1):
+    return true
+
+  for dy in -1 .. 1:
+    for dx in -1 .. 1:
+      if dx == 0 and dy == 0:
+        continue
+      if validRelocation(ivec2(blocker.pos.x + dx, blocker.pos.y + dy)):
+        return true
+  return false
+
+proc canMoveAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 7:
+    return false
+  let delta = getOrientationDelta(Orientation(argument))
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  if not isValidPos(targetPos):
+    return false
+  if env.terrain[targetPos.x][targetPos.y] == Water:
+    return false
+  if env.isEmpty(targetPos):
+    return true
+  return env.canRelocatePlantedLantern(env.getThing(targetPos), delta)
+
+proc canAttackTarget(agent: Thing, target: Thing): bool =
+  if target.isNil:
+    return false
+  case target.kind:
+  of Tumor, Spawner:
+    return true
+  of Agent:
+    return target.agentId != agent.agentId and getTeamId(target.agentId) != getTeamId(agent.agentId)
+  else:
+    return false
+
+proc canAttackAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 7:
+    return false
+  let attackOrientation = Orientation(argument)
+  let delta = getOrientationDelta(attackOrientation)
+  if agent.inventorySpear > 0:
+    let left = ivec2(-delta.y, delta.x)
+    let right = ivec2(delta.y, -delta.x)
+    for step in 1 .. 3:
+      let forward = agent.pos + ivec2(delta.x * step, delta.y * step)
+      for targetPos in [forward, forward + left, forward + right]:
+        if isValidPos(targetPos) and canAttackTarget(agent, env.getThing(targetPos)):
+          return true
+    return false
+
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  return isValidPos(targetPos) and canAttackTarget(agent, env.getThing(targetPos))
+
+proc canUseAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 7:
+    return false
+  let delta = getOrientationDelta(Orientation(argument))
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  if not isValidPos(targetPos) or isTileFrozen(targetPos, env):
+    return false
+
+  case env.terrain[targetPos.x][targetPos.y]:
+  of Bridge, Fertile:
+    return false
+  of Water:
+    return agent.inventoryWater < MapObjectAgentMaxInventory
+  of Wheat:
+    return agent.inventoryWheat < MapObjectAgentMaxInventory
+  of Tree:
+    return agent.inventoryWood < MapObjectAgentMaxInventory
+  of Empty:
+    if env.isEmpty(targetPos):
+      return agent.inventoryBread > 0 or agent.inventoryWater > 0
+
+  let thing = env.getThing(targetPos)
+  if thing.isNil or isThingFrozen(thing, env):
+    return false
+  case thing.kind:
+  of Mine:
+    return thing.cooldown == 0 and agent.inventoryOre < MapObjectAgentMaxInventory
+  of Converter:
+    return thing.cooldown == 0 and agent.inventoryOre > 0 and agent.inventoryBattery < MapObjectAgentMaxInventory
+  of Forge:
+    return thing.cooldown == 0 and agent.inventoryWood > 0 and agent.inventorySpear == 0
+  of WeavingLoom:
+    return thing.cooldown == 0 and agent.inventoryWheat > 0 and agent.inventoryLantern == 0
+  of Armory:
+    return thing.cooldown == 0 and agent.inventoryWood > 0 and agent.inventoryArmor == 0
+  of ClayOven:
+    return thing.cooldown == 0 and agent.inventoryWheat > 0
+  of assembler:
+    return thing.cooldown == 0 and agent.inventoryBattery >= 1
+  else:
+    return false
+
+proc canSwapAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 1:
+    return false
+  let targetPos = agent.pos + orientationToVec(agent.orientation)
+  let target = env.getThing(targetPos)
+  return not target.isNil and target.kind == Agent and not isThingFrozen(target, env)
+
+proc canPutAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 7:
+    return false
+  let delta = getOrientationDelta(Orientation(argument))
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  if not isValidPos(targetPos):
+    return false
+  let target = env.getThing(targetPos)
+  if target.isNil or target.kind != Agent or isThingFrozen(target, env):
+    return false
+  return (agent.inventoryArmor > 0 and target.inventoryArmor == 0) or
+    (agent.inventoryBread > 0 and target.inventoryBread < MapObjectAgentMaxInventory)
+
+proc canPlantAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument > 7:
+    return false
+  if agent.inventoryLantern <= 0:
+    return false
+  let delta = getOrientationDelta(Orientation(argument))
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  return isValidPos(targetPos) and env.isEmpty(targetPos) and
+    env.terrain[targetPos.x][targetPos.y] != Water and not isTileFrozen(targetPos, env)
+
+proc canPlantResourceAction(env: Environment, agent: Thing, argument: int): bool =
+  if argument < 0 or argument >= 8:
+    return false
+  let plantingTree = argument >= 4
+  let dirIndex = if plantingTree: argument - 4 else: argument
+  let delta = getOrientationDelta(Orientation(dirIndex))
+  let targetPos = ivec2(agent.pos.x + delta.x, agent.pos.y + delta.y)
+  if not isValidPos(targetPos):
+    return false
+  if not env.isEmpty(targetPos) or env.terrain[targetPos.x][targetPos.y] == Water or isTileFrozen(targetPos, env):
+    return false
+  if env.terrain[targetPos.x][targetPos.y] != Fertile:
+    return false
+  if plantingTree:
+    return agent.inventoryWood > 0
+  return agent.inventoryWheat > 0
+
+proc isActionValid*(env: Environment, agentId: int, actionValue: uint8): bool =
+  if agentId < 0 or agentId >= env.agents.len:
+    return false
+  let agent = env.agents[agentId]
+  let decoded = decodeAction(actionValue)
+  let verb = decoded.verb.int
+  let argument = decoded.argument.int
+  if agent.isNil or agent.frozen > 0:
+    return verb == 0
+  case verb:
+  of 0:
+    return true
+  of 1:
+    return env.canMoveAction(agent, argument)
+  of 2:
+    return env.canAttackAction(agent, argument)
+  of 3:
+    return env.canUseAction(agent, argument)
+  of 4:
+    return env.canSwapAction(agent, argument)
+  of 5:
+    return env.canPutAction(agent, argument)
+  of 6:
+    return env.canPlantAction(agent, argument)
+  of 7:
+    return env.canPlantResourceAction(agent, argument)
+  else:
+    return false
+
 proc resetTileColor*(env: Environment, pos: IVec2) =
   ## Restore a tile to the default floor color
   env.tileColors[pos.x][pos.y] = BaseTileColorDefault
