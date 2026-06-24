@@ -19,6 +19,7 @@ from urllib.request import urlopen
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from tribal_village_env.build import ensure_wasm_bundle_current
 from tribal_village_env.coworld.server import CoworldConfig
 from tribal_village_env.coworld.direct_env import CoworldTribalVillageEnv
 from tribal_village_env.coworld.player import BuiltinAIPlayer
@@ -360,10 +361,9 @@ def assert_client_websockets_are_proxy_relative() -> None:
     for client, websocket_path in {
         "global.html": "/global",
         "player.html": "/player",
-        "replay.html": "/replay",
     }.items():
         html = (client_dir / client).read_text()
-        assert './common/view_common.js' in html
+        assert "./common/view_common.js" in html
         assert 'src="/client/' not in html
         assert "rgb_window" not in html
         assert 'kind !== "rgb"' not in html
@@ -392,22 +392,12 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "tilePanel" not in global_html
     player_html = (client_dir / "player.html").read_text()
     assert 'worldAddress.pathname.replace(/\\/player$/, "/global")' in player_html
-    assert "worldAddress.search = \"\"" in player_html
+    assert 'worldAddress.search = ""' in player_html
     assert "tilePanel" not in player_html
-    replay_html = (client_dir / "replay.html").read_text()
-    assert "Tribal Village Replay</strong>" not in replay_html
-    assert 'id="status"' not in replay_html
-    assert 'class="top-status"' not in replay_html
-    assert "tilePanel" not in replay_html
-    assert 'data-replay="restart"' in replay_html
-    assert 'id="timeline"' in replay_html
-    assert 'id="names"' in replay_html
-    assert "renderer.setShowLabels(namesEl.checked)" in replay_html
-    assert 'data-speed="slower"' in replay_html
-    assert 'data-speed="faster"' in replay_html
-    assert 'type: "speed"' in replay_html
-    assert 'type: "seek"' in replay_html
-    assert "keydown" in replay_html
+    replay_shell = (ROOT / "scripts" / "shell_minimal.html").read_text()
+    assert "fetch('./replay.json'" in replay_shell
+    assert "FS.writeFile('/replay.json'" in replay_shell
+    assert "addRunDependency('tribal-village-replay-json')" in replay_shell
     manifest = json.loads((ROOT / "coworld_manifest_template.json").read_text())
     assert manifest["variants"][0]["game_config"]["max_steps"] == 2000
     assert manifest["certification"]["game_config"]["max_steps"] == 64
@@ -421,20 +411,51 @@ def assert_client_websockets_are_proxy_relative() -> None:
     )
 
 
-def assert_static_clients_are_served(port: int) -> None:
+def assert_static_clients_are_served(
+    port: int, *, expect_replay_payload: bool = False
+) -> None:
     with urlopen(
         f"http://127.0.0.1:{port}/client/common/view_common.js", timeout=5
     ) as response:
         assert response.status == 200
         assert b"WorldRenderer" in response.read()
+    with urlopen(f"http://127.0.0.1:{port}/client/replay", timeout=5) as response:
+        assert response.status == 200
+        replay_html = response.read()
+        assert b"replay.json" in replay_html
+        assert b"tribal_village.js" in replay_html
+    with urlopen(
+        f"http://127.0.0.1:{port}/client/tribal_village.js", timeout=5
+    ) as response:
+        assert response.status == 200
+        assert b"Module" in response.read(4096)
+    with urlopen(
+        f"http://127.0.0.1:{port}/client/tribal_village.wasm", timeout=5
+    ) as response:
+        assert response.status == 200
+        assert response.read(4) == b"\x00asm"
+    with urlopen(
+        f"http://127.0.0.1:{port}/client/tribal_village.data", timeout=5
+    ) as response:
+        assert response.status == 200
+        assert response.read(8)
     with urlopen(
         f"http://127.0.0.1:{port}/assets/objects/floor.png", timeout=5
     ) as response:
         assert response.status == 200
         assert response.read(8) == b"\x89PNG\r\n\x1a\n"
+    if expect_replay_payload:
+        with urlopen(
+            f"http://127.0.0.1:{port}/client/replay.json", timeout=5
+        ) as response:
+            assert response.status == 200
+            replay = json.loads(response.read().decode("utf-8"))
+            assert replay["schema"] == "tribal-village-replay-v2"
+            assert len(replay["ticks"]) >= 1
 
 
 def main() -> None:
+    ensure_wasm_bundle_current()
     assert_client_websockets_are_proxy_relative()
     with tempfile.TemporaryDirectory(prefix="tribal-village-coworld-") as temp:
         tempdir = Path(temp)
@@ -442,11 +463,7 @@ def main() -> None:
         results_path = tempdir / "results.json"
         replay_path = tempdir / "replay.json"
         replay_z_path = tempdir / "replay.z"
-        config_path.write_text(
-            json.dumps(
-                coworld_config_payload()
-            )
-        )
+        config_path.write_text(json.dumps(coworld_config_payload()))
         port = free_port()
         env = os.environ.copy()
         env.update(
@@ -536,6 +553,7 @@ def main() -> None:
         )
         try:
             wait_for_health(replay_port, replay_process)
+            assert_static_clients_are_served(replay_port, expect_replay_payload=True)
             asyncio.run(
                 assert_websocket_rejected(
                     f"ws://127.0.0.1:{replay_port}/global",

@@ -25,7 +25,21 @@
 
     <script type='text/javascript'>
       var Module = {
-        preRun: [],
+        preRun: [function() {
+          addRunDependency('tribal-village-replay-json');
+          fetch('./replay.json', { cache: 'no-store' }).then(function(response) {
+            if (!response.ok) {
+              throw new Error('replay.json returned HTTP ' + response.status);
+            }
+            return response.arrayBuffer();
+          }).then(function(buffer) {
+            FS.writeFile('/replay.json', new Uint8Array(buffer));
+            removeRunDependency('tribal-village-replay-json');
+          }, function(error) {
+            console.error(error);
+            removeRunDependency('tribal-village-replay-json');
+          });
+        }],
         postRun: [],
         print: (function() {
           var element = document.getElementById('output');
