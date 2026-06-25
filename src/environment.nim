@@ -46,7 +46,7 @@ const
   MinTintEpsilon* = 5
 
   # Observation System
-  ObservationLayers* = 21
+  ObservationLayers* = 26
   ObservationWidth* = 11
   ObservationHeight* = 11
 
@@ -68,19 +68,18 @@ const
 proc getTeamId*(agentId: int): int =
   ## Inline team ID calculation - frequently used
   agentId div MapAgentsPerHouse
-
-template isValidPos*(pos: IVec2): bool =
-  ## Inline bounds checking template - very frequently used
-  pos.x >= 0 and pos.x < MapWidth and pos.y >= 0 and pos.y < MapHeight
-
-template safeTintAdd*(tintMod: var int16, delta: int): void =
-  ## Safe tint accumulation with overflow protection
-  tintMod = max(-32000'i16, min(32000'i16, tintMod + delta.int16))
 {.pop.}
 
 
 
 type
+  AgentRole* = enum
+    Hearter    # Handles assembler/battery workflow (currently unassigned)
+    Armorer    # Wood -> Armor (currently unassigned)
+    Hunter     # Wood -> Spear -> Hunt Tumors (one per team)
+    Lighter    # Wheat -> Lantern -> Plant (four per team)
+    Farmer     # Creates fertile ground and plants wheat/trees
+
   ObservationName* = enum
     AgentLayer = 0        # Team-aware: 0=empty, 1=team0, 2=team1, 3=team2, 255=Tumor
     AgentOrientationLayer = 1
@@ -103,6 +102,11 @@ type
     assemblerReadyLayer = 18
     TintLayer = 19        # Unified tint layer for all environmental effects
     AgentInventoryBreadLayer = 20  # Bread baked from clay oven
+    AgentRoleHearterLayer = 21
+    AgentRoleArmorerLayer = 22
+    AgentRoleHunterLayer = 23
+    AgentRoleLighterLayer = 24
+    AgentRoleFarmerLayer = 25
 
 
   ThingKind* = enum
@@ -185,6 +189,41 @@ type
   ActionTintCountdown* = array[MapWidth, array[MapHeight, int8]]
   ActionTintColor* = array[MapWidth, array[MapHeight, TileColor]]
   ActionTintFlags* = array[MapWidth, array[MapHeight, bool]]
+
+{.push inline.}
+proc scriptedAgentRole*(agentId: int): AgentRole =
+  ## Native scripted-controller role schedule, repeated once per six-agent house.
+  case agentId mod MapAgentsPerHouse:
+  of 0, 1, 3, 4:
+    Lighter
+  of 2:
+    Hunter
+  of 5:
+    Farmer
+  else:
+    Hearter
+
+proc scriptedRoleObservationLayer*(role: AgentRole): ObservationName =
+  case role
+  of Hearter:
+    AgentRoleHearterLayer
+  of Armorer:
+    AgentRoleArmorerLayer
+  of Hunter:
+    AgentRoleHunterLayer
+  of Lighter:
+    AgentRoleLighterLayer
+  of Farmer:
+    AgentRoleFarmerLayer
+
+template isValidPos*(pos: IVec2): bool =
+  ## Inline bounds checking template - very frequently used
+  pos.x >= 0 and pos.x < MapWidth and pos.y >= 0 and pos.y < MapHeight
+
+template safeTintAdd*(tintMod: var int16, delta: int): void =
+  ## Safe tint accumulation with overflow protection
+  tintMod = max(-32000'i16, min(32000'i16, tintMod + delta.int16))
+{.pop.}
 
 const
   BaseTileColorDefault = TileColor(r: 0.7, g: 0.65, b: 0.6, intensity: 1.0)
@@ -446,6 +485,10 @@ proc rebuildObservations*(env: Environment) =
   for agent in env.agents:
     if agent.isNil:
       continue
+    let roleLayer = ord(scriptedRoleObservationLayer(scriptedAgentRole(agent.agentId)))
+    for x in 0 ..< ObservationWidth:
+      for y in 0 ..< ObservationHeight:
+        env.observations[agent.agentId][roleLayer][x][y] = 1'u8
     let teamValue = getTeamId(agent.agentId) + 1
     env.updateObservations(AgentLayer, agent.pos, teamValue)
     env.updateObservations(AgentOrientationLayer, agent.pos, agent.orientation.int)

@@ -83,7 +83,7 @@ const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
 
 const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
-const TrainingAgentStride* = 22
+const TrainingAgentStride* = 23
 const TrainingObjectStride* = 5
 const TrainingKindTerrainWater* = 100'i32
 const TrainingKindTerrainWheat* = 101'i32
@@ -469,7 +469,7 @@ proc tribal_village_export_training_state(
   ## Agent rows: x, y, alive, team, ore, battery, water, wheat, wood,
   ## spear, lantern, armor, bread, action_invalid, action_noop, action_move,
   ## action_attack, action_use, action_swap, action_put, action_plant,
-  ## action_plant_resource.
+  ## action_plant_resource, scripted_role.
   ## Object rows: kind, x, y, value, team.
   ## - assembler value is hearts
   ## - mine value is resources
@@ -527,6 +527,7 @@ proc tribal_village_export_training_state(
         agent_buffer[base + 19] = stats.actionPut.int32
         agent_buffer[base + 20] = stats.actionPlant.int32
         agent_buffer[base + 21] = stats.actionPlantResource.int32
+      agent_buffer[base + 22] = ord(scriptedAgentRole(agentId)).int32
 
     var rows = 0
     template addObject(kindValue: int32, xValue: int32, yValue: int32, value: int32, team: int32) =
