@@ -11,5 +11,11 @@ services:
       context: .
       dockerfile: players/villager/Dockerfile
   commissioner:
-    image: ghcr.io/metta-ai/commissioners-baseline@sha256:02a19be80fa07b3005b443fa5dddd4f4829f3e984cbd5fcea356e84deb014542
+    image: coworld-tribal-village-commissioner:latest
     platform: linux/amd64
+    build:
+      context: ./commissioner
+      dockerfile: commissioners/Dockerfile
+      args:
+        COMMISSIONER_KEY: config_driven
+        RULESET_STRATEGY_CONFIG_NAME: default

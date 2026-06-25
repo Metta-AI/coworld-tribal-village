@@ -407,7 +407,7 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert "seed" not in manifest["certification"]["game_config"]
     assert (
         manifest["commissioner"][0]["source_url"]
-        == "https://github.com/Metta-AI/commissioners/tree/11006630104e4b1496177beb22e5a5d98c22e252/commissioners/default"
+        == "https://github.com/Metta-AI/coworld-tribal-village/tree/main/commissioner/commissioners/ruleset_strategy_commissioner"
     )
 
 

@@ -164,6 +164,14 @@ def _build_wasm_bundle(project_root: Path) -> Path:
         )
 
     _remove_stale_wasm_bundle_outputs(project_root)
+    if not output_html.exists():
+        shell_template = (project_root / "scripts" / "shell_minimal.html").read_text()
+        output_html.write_text(
+            shell_template.replace(
+                "{{{ SCRIPT }}}",
+                '<script async type="text/javascript" src="tribal_village.js"></script>',
+            )
+        )
     for output in _wasm_bundle_outputs(project_root):
         if not output.exists():
             raise RuntimeError(f"WASM build completed but {output.name} not found.")
