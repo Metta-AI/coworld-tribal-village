@@ -174,7 +174,7 @@
       "name": "Default Commissioner",
       "type": "commissioner",
       "description": "Game-agnostic round-robin commissioner with mean-score rankings.",
-      "source_url": "https://github.com/Metta-AI/commissioners/tree/11006630104e4b1496177beb22e5a5d98c22e252/commissioners/default",
+      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main/commissioner/commissioners/ruleset_strategy_commissioner",
       "image": "{{COMMISSIONER_IMAGE}}"
     }
   ],
