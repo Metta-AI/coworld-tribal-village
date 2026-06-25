@@ -6,14 +6,6 @@ import vmath
 import environment, common
 
 type
-  # Simple agent roles - six agents per team
-  AgentRole* = enum
-    Hearter    # Handles assembler/battery workflow (currently unassigned)
-    Armorer    # Wood -> Armor (currently unassigned)
-    Hunter     # Wood -> Spear -> Hunt Tumors (one per team)
-    Lighter    # Wheat -> Lantern -> Plant (four per team)
-    Farmer     # Creates fertile ground and plants wheat/trees
-
   # Minimal state tracking with spiral search
   AgentState = object
     role: AgentRole
@@ -515,17 +507,8 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     # farmer sustains the wheat supply. No slot banks respawn hearts - eval
     # shows lantern throughput from a fourth Lighter outscores the respawns
     # the initial 5 assembler hearts already cover (1030 vs 947 team-mean).
-    let role = case agentId mod MapAgentsPerHouse:  # MapAgentsPerHouse = 6
-      of 0: Lighter
-      of 1: Lighter
-      of 2: Hunter
-      of 3: Lighter
-      of 4: Lighter
-      of 5: Farmer
-      else: Hearter
-
     controller.agents[agentId] = AgentState(
-      role: role,
+      role: scriptedAgentRole(agentId),
       spiralStepsInArc: 0,
       spiralArcsCompleted: 0,
       basePosition: agent.pos,
