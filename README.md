@@ -1,5 +1,10 @@
 # Tribal Village Environment
 
+<!-- COWORLD-VERIFY-BADGE:START -->
+![Coworld verify: not ready](https://img.shields.io/badge/coworld%20verify-not%20ready-lightgrey)
+<!-- COWORLD-VERIFY-BADGE:END -->
+
+
 <!-- COWORLD-REPO-STATUS:START -->
 > [!NOTE]
 > Coworld repo status: **template** (`coworld-template`).
