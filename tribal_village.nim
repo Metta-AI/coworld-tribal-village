@@ -1,9 +1,11 @@
-import std/[os, strutils, math],
+import std/[os, strutils, math, json, base64],
   boxy, windy, vmath,
   src/environment, src/common, src/renderer, src/external_actions
 
 when not defined(emscripten):
   import opengl
+else:
+  import windy/platforms/emscripten/emdefs
 
 let baseWindowSize = ivec2(1280, 800)
 let largeWindowSize = ivec2(baseWindowSize.x * 2, baseWindowSize.y * 2)
@@ -28,7 +30,10 @@ makeContextCurrent(window)
 when not defined(emscripten):
   loadExtensions()
 
-bxy = newBoxy()
+when defined(emscripten):
+  bxy = newBoxy(atlasSize = 2048)
+else:
+  bxy = newBoxy()
 rootArea = Area(layout: Horizontal)
 worldMapPanel = Panel(panelType: WorldMap, name: "World Map")
 
@@ -43,7 +48,63 @@ let mapCenter = vec2(
 var lastPanelSize = ivec2(0, 0)
 var lastContentScale: float32 = 0.0
 
+type
+  ReplayScript = object
+    loaded: bool
+    config: EnvironmentConfig
+    tickRate: float32
+    tick: int
+    actions: seq[array[MapAgents, uint8]]
+
 var actionsArray: array[MapAgents, uint8]
+var replayScript: ReplayScript
+
+proc decodeReplayActions(tick: JsonNode): array[MapAgents, uint8] =
+  let rawActions = base64.decode(tick["a"].getStr())
+  if rawActions.len != MapAgents:
+    raise newException(ValueError, "Replay tick action count does not match Tribal Village agent count")
+  for i in 0..<MapAgents:
+    result[i] = rawActions[i].uint8
+
+proc loadReplayScript(): ReplayScript =
+  let replayPath = "/replay.json"
+  if not fileExists(replayPath):
+    return ReplayScript(loaded: false)
+
+  let payload = parseFile(replayPath)
+  if payload["schema"].getStr() != "tribal-village-replay-v2":
+    raise newException(ValueError, "Unsupported Tribal Village replay schema")
+
+  let initial = payload["initial"]
+  var config = defaultEnvironmentConfig()
+  config.seed = initial["seed"].getInt()
+  config.maxSteps = initial["max_steps"].getInt()
+
+  var actions: seq[array[MapAgents, uint8]] = @[]
+  for tick in payload["ticks"].items:
+    actions.add(decodeReplayActions(tick))
+
+  result = ReplayScript(
+    loaded: true,
+    config: config,
+    tickRate: initial["tick_rate"].getFloat().float32,
+    tick: 0,
+    actions: actions
+  )
+
+proc resetReplay() =
+  env = newEnvironment(replayScript.config)
+  replayScript.tick = 0
+  lastSimTime = nowSeconds()
+  play = true
+
+proc stepReplay() =
+  if replayScript.tick >= replayScript.actions.len:
+    play = false
+    return
+  actionsArray = replayScript.actions[replayScript.tick]
+  env.step(addr actionsArray)
+  inc replayScript.tick
 
 proc fitMapToPanel(panelRect: IRect) =
   ## Centers the map and chooses a zoom that fits the viewport when the window is resized.
@@ -73,12 +134,21 @@ proc display() =
     common.mouseCapturedPanel = nil
   
   if window.buttonPressed[KeySpace]:
-    if play:
-      play = false
+    if replayScript.loaded:
+      if play:
+        play = false
+      else:
+        lastSimTime = nowSeconds()
+        play = true
     else:
-      lastSimTime = nowSeconds()
-      actionsArray = getActions(env)
-      env.step(addr actionsArray)
+      if play:
+        play = false
+      else:
+        lastSimTime = nowSeconds()
+        actionsArray = getActions(env)
+        env.step(addr actionsArray)
+  if replayScript.loaded and (window.buttonPressed[KeyR] or window.buttonPressed[KeyHome]):
+    resetReplay()
   if window.buttonPressed[KeyMinus] or window.buttonPressed[KeyLeftBracket]:
     playSpeed *= 0.5
     playSpeed = clamp(playSpeed, 0.00001, 60.0)
@@ -97,8 +167,11 @@ proc display() =
   let now = nowSeconds()
   while play and (lastSimTime + playSpeed < now):
     lastSimTime += playSpeed
-    actionsArray = getActions(env)
-    env.step(addr actionsArray)
+    if replayScript.loaded:
+      stepReplay()
+    else:
+      actionsArray = getActions(env)
+      env.step(addr actionsArray)
 
   bxy.beginFrame(window.size)
 
@@ -218,7 +291,7 @@ proc display() =
 
   useSelections()
 
-  if selection != nil and selection.kind == Agent:
+  if selection != nil and selection.kind == Agent and not replayScript.loaded:
     let agent = selection
 
     template overrideAndStep(action: uint8) =
@@ -273,6 +346,11 @@ proc display() =
   inc frame
 
 
+replayScript = loadReplayScript()
+if replayScript.loaded:
+  resetReplay()
+  playSpeed = 1.0'f32 / max(replayScript.tickRate, 1.0'f32)
+
 # Build the atlas with progress feedback and error handling.
 echo "🎨 Loading tribal assets..."
 var loadedCount = 0
@@ -289,7 +367,11 @@ for path in walkDirRec("data/"):
     inc loadedCount
 
     try:
-      bxy.addImage(path.replace("data/", "").replace(".png", ""), readImage(path))
+      let image = when defined(emscripten):
+        decodeImage(readFile(path))
+      else:
+        readImage(path)
+      bxy.addImage(path.replace("data/", "").replace(".png", ""), image)
     except Exception as e:
       echo "⚠️  Skipping ", path, ": ", e.msg
 
@@ -305,7 +387,9 @@ for i in 1..paramCount():
 # Priority: explicit CLI flag --> env vars --> fallback to built-in AI.
 let envExternal = existsEnv("TRIBAL_PYTHON_CONTROL") or existsEnv("TRIBAL_EXTERNAL_CONTROL")
 
-if useExternalController:
+if replayScript.loaded:
+  discard
+elif useExternalController:
   initGlobalController(ExternalNN)
 elif envExternal:
   initGlobalController(ExternalNN)
@@ -322,7 +406,7 @@ when defined(emscripten):
   proc main() {.cdecl.} =
     display()
     pollEvents()
-  window.run(main)
+  emscripten_set_main_loop(main, 0, true)
 else:
   while not window.closeRequested:
     display()

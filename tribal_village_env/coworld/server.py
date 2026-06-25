@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from tribal_village_env.coworld.direct_env import (
     ACTION_ARGUMENT_COUNT,
@@ -28,11 +28,17 @@ from tribal_village_env.coworld.direct_env import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CLIENT_DIR = Path(__file__).parent / "clients"
+WASM_CLIENT_DIR = PROJECT_ROOT / "build" / "web"
 ASSETS_DIR = PROJECT_ROOT / "data"
 ASSET_MEDIA_TYPES = {
+    ".data": "application/octet-stream",
+    ".html": "text/html; charset=utf-8",
     ".js": "application/javascript",
+    ".json": "application/json",
+    ".map": "application/json",
     ".png": "image/png",
     ".ttf": "font/ttf",
+    ".wasm": "application/wasm",
 }
 HTTP_USER_AGENT = "coworld-tribal-village/0.1"
 
@@ -349,9 +355,7 @@ class TribalVillageCoworld:
         deadline = asyncio.get_running_loop().time() + INITIAL_ACTION_TIMEOUT_SECONDS
         while True:
             async with self.lock:
-                if all(
-                    self.action_versions[slot] > 0 for slot in self.connected_slots
-                ):
+                if all(self.action_versions[slot] > 0 for slot in self.connected_slots):
                     return
             if asyncio.get_running_loop().time() >= deadline:
                 return
@@ -461,6 +465,7 @@ class TribalVillageCoworld:
 
 class TribalVillageReplay:
     def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
         schema = payload.get("schema")
         if schema == REPLAY_SCHEMA_V2:
             config = payload.get("initial", {})
@@ -704,7 +709,9 @@ server: uvicorn.Server | None = None
 async def lifespan(_app: FastAPI):
     global runtime
     if REPLAY_LOAD_ENV_VAR in os.environ:
-        runtime = TribalVillageReplay(load_replay_payload(os.environ[REPLAY_LOAD_ENV_VAR]))
+        runtime = TribalVillageReplay(
+            load_replay_payload(os.environ[REPLAY_LOAD_ENV_VAR])
+        )
     else:
         config = CoworldConfig.from_dict(
             json.loads(read_data(os.environ[CONFIG_ENV_VAR]).decode("utf-8"))
@@ -756,13 +763,40 @@ def player_client() -> HTMLResponse:
 
 
 @app.get("/client/replay")
-def replay_client() -> HTMLResponse:
-    return HTMLResponse((CLIENT_DIR / "replay.html").read_text())
+def replay_client() -> FileResponse:
+    path = _resolve_static_path(WASM_CLIENT_DIR, "tribal_village.html")
+    return FileResponse(
+        path,
+        media_type=ASSET_MEDIA_TYPES[path.suffix],
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/client/replay.json")
+def replay_payload() -> Response:
+    active = _runtime()
+    if not isinstance(active, TribalVillageReplay):
+        raise HTTPException(status_code=404)
+    return Response(
+        json.dumps(active.payload, separators=(",", ":")),
+        media_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/client/common/{asset_path:path}")
 def common_client_asset(asset_path: str) -> FileResponse:
     path = _resolve_static_path(CLIENT_DIR, asset_path)
+    return FileResponse(
+        path,
+        media_type=ASSET_MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/client/{asset_path:path}")
+def wasm_client_asset(asset_path: str) -> FileResponse:
+    path = _resolve_static_path(WASM_CLIENT_DIR, asset_path)
     return FileResponse(
         path,
         media_type=ASSET_MEDIA_TYPES.get(path.suffix, "application/octet-stream"),

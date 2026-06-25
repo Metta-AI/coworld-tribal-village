@@ -86,14 +86,13 @@ task wasm, "Build Tribal Village WASM demo":
 
   let passLFlags = [
     "--shell-file=" & shellFileRel,
-    "--preload-file data",
+    "--embed-file data",
     "-sUSE_GLFW=3",
     "-sUSE_WEBGL2=1",
     "-sASYNCIFY",
     "-sALLOW_MEMORY_GROWTH",
     "-sINITIAL_MEMORY=512MB",
     "-sFULL_ES3=1",
-    "-sGL_ENABLE_GET_PROC_ADDRESS=1",
     "-sERROR_ON_UNDEFINED_SYMBOLS=0"
   ]
 

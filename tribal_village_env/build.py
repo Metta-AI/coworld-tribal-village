@@ -32,6 +32,14 @@ def _collect_source_files(project_root: Path) -> list[Path]:
     ]
 
 
+def _collect_wasm_source_files(project_root: Path) -> list[Path]:
+    data_files = [path for path in (project_root / "data").rglob("*") if path.is_file()]
+    return _collect_source_files(project_root) + [
+        project_root / "scripts" / "shell_minimal.html",
+        *data_files,
+    ]
+
+
 def _latest_mtime(paths: Iterable[Path]) -> Optional[float]:
     mtimes = [path.stat().st_mtime for path in paths if path.exists()]
     if not mtimes:
@@ -102,6 +110,108 @@ def ensure_nim_library_current(verbose: bool = True) -> Path:
         print(f"Copied {built_lib} to {target_path}")
 
     return target_path
+
+
+def _build_wasm_bundle(project_root: Path) -> Path:
+    _ensure_nim_toolchain()
+    _install_nim_deps(project_root)
+
+    if shutil.which("emcc") is None:
+        raise RuntimeError(
+            "emcc not found. Install Emscripten to build Tribal Village WASM."
+        )
+
+    output_html = project_root / "build" / "web" / "tribal_village.html"
+    output_html.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "nim",
+        "c",
+        "--app:gui",
+        "--threads:off",
+        "--gc:arc",
+        "--exceptions:goto",
+        "--define:noSignalHandler",
+        "--os:linux",
+        "--cpu:wasm32",
+        "--cc:clang",
+        "--clang.exe:emcc",
+        "--clang.linkerexe:emcc",
+        "--nimcache:build/web/nimcache",
+        "--listCmd",
+        "-d:release",
+        "-d:emscripten",
+        "-d:nimNoDevRandom",
+        "-d:nimNoGetRandom",
+        "-d:nimNoSysrand",
+        f"--out:{output_html}",
+        "--passL:--shell-file=scripts/shell_minimal.html",
+        "--passL:--embed-file data",
+        "--passL:-sUSE_GLFW=3",
+        "--passL:-sUSE_WEBGL2=1",
+        "--passL:-sASYNCIFY",
+        "--passL:-sALLOW_MEMORY_GROWTH",
+        "--passL:-sINITIAL_MEMORY=512MB",
+        "--passL:-sFULL_ES3=1",
+        "--passL:-sERROR_ON_UNDEFINED_SYMBOLS=0",
+        "tribal_village.nim",
+    ]
+    result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
+    if result.returncode != 0:
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        raise RuntimeError(
+            f"Failed to build Tribal Village WASM (exit {result.returncode}). stdout: {stdout} stderr: {stderr}"
+        )
+
+    _remove_stale_wasm_bundle_outputs(project_root)
+    for output in _wasm_bundle_outputs(project_root):
+        if not output.exists():
+            raise RuntimeError(f"WASM build completed but {output.name} not found.")
+    return output_html
+
+
+def _wasm_bundle_outputs(project_root: Path) -> list[Path]:
+    web_dir = project_root / "build" / "web"
+    return [
+        web_dir / "tribal_village.html",
+        web_dir / "tribal_village.js",
+        web_dir / "tribal_village.wasm",
+    ]
+
+
+def _remove_stale_wasm_bundle_outputs(project_root: Path) -> None:
+    for output in [project_root / "build" / "web" / "tribal_village.data"]:
+        if output.exists():
+            output.unlink()
+
+
+def ensure_wasm_bundle_current(verbose: bool = True) -> Path:
+    """Rebuild the browser replay bundle if missing or stale."""
+
+    package_dir = Path(__file__).resolve().parent
+    project_root = package_dir.parent
+    _remove_stale_wasm_bundle_outputs(project_root)
+    outputs = _wasm_bundle_outputs(project_root)
+
+    source_files = _collect_wasm_source_files(project_root)
+    latest_source_mtime = _latest_mtime(source_files)
+    output_mtimes = [output.stat().st_mtime for output in outputs if output.exists()]
+    needs_rebuild = len(output_mtimes) != len(outputs) or (
+        latest_source_mtime is not None and min(output_mtimes) < latest_source_mtime
+    )
+
+    if not needs_rebuild:
+        return outputs[0]
+
+    if verbose:
+        print("Building Tribal Village Emscripten replay bundle...")
+
+    html_path = _build_wasm_bundle(project_root)
+
+    if verbose:
+        print(f"Built {html_path}")
+
+    return html_path
 
 
 def _ensure_nim_toolchain() -> None:
