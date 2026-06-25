@@ -428,17 +428,14 @@ def assert_static_clients_are_served(
         f"http://127.0.0.1:{port}/client/tribal_village.js", timeout=5
     ) as response:
         assert response.status == 200
-        assert b"Module" in response.read(4096)
+        replay_js = response.read()
+        assert b"Module" in replay_js
+        assert b"tribal_village.data" not in replay_js
     with urlopen(
         f"http://127.0.0.1:{port}/client/tribal_village.wasm", timeout=5
     ) as response:
         assert response.status == 200
         assert response.read(4) == b"\x00asm"
-    with urlopen(
-        f"http://127.0.0.1:{port}/client/tribal_village.data", timeout=5
-    ) as response:
-        assert response.status == 200
-        assert response.read(8)
     with urlopen(
         f"http://127.0.0.1:{port}/assets/objects/floor.png", timeout=5
     ) as response:

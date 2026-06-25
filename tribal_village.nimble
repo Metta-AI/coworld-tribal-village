@@ -86,7 +86,7 @@ task wasm, "Build Tribal Village WASM demo":
 
   let passLFlags = [
     "--shell-file=" & shellFileRel,
-    "--preload-file data",
+    "--embed-file data",
     "-sUSE_GLFW=3",
     "-sUSE_WEBGL2=1",
     "-sASYNCIFY",

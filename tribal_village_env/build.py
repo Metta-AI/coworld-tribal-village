@@ -145,7 +145,7 @@ def _build_wasm_bundle(project_root: Path) -> Path:
         "-d:nimNoSysrand",
         f"--out:{output_html}",
         "--passL:--shell-file=scripts/shell_minimal.html",
-        "--passL:--preload-file data",
+        "--passL:--embed-file data",
         "--passL:-sUSE_GLFW=3",
         "--passL:-sUSE_WEBGL2=1",
         "--passL:-sASYNCIFY",
@@ -163,6 +163,7 @@ def _build_wasm_bundle(project_root: Path) -> Path:
             f"Failed to build Tribal Village WASM (exit {result.returncode}). stdout: {stdout} stderr: {stderr}"
         )
 
+    _remove_stale_wasm_bundle_outputs(project_root)
     for output in _wasm_bundle_outputs(project_root):
         if not output.exists():
             raise RuntimeError(f"WASM build completed but {output.name} not found.")
@@ -175,8 +176,13 @@ def _wasm_bundle_outputs(project_root: Path) -> list[Path]:
         web_dir / "tribal_village.html",
         web_dir / "tribal_village.js",
         web_dir / "tribal_village.wasm",
-        web_dir / "tribal_village.data",
     ]
+
+
+def _remove_stale_wasm_bundle_outputs(project_root: Path) -> None:
+    for output in [project_root / "build" / "web" / "tribal_village.data"]:
+        if output.exists():
+            output.unlink()
 
 
 def ensure_wasm_bundle_current(verbose: bool = True) -> Path:
@@ -184,6 +190,7 @@ def ensure_wasm_bundle_current(verbose: bool = True) -> Path:
 
     package_dir = Path(__file__).resolve().parent
     project_root = package_dir.parent
+    _remove_stale_wasm_bundle_outputs(project_root)
     outputs = _wasm_bundle_outputs(project_root)
 
     source_files = _collect_wasm_source_files(project_root)
