@@ -1,5 +1,22 @@
 # Tribal Village Environment
 
+<!-- COWORLD-REPO-STATUS:START -->
+> [!NOTE]
+> Coworld repo status: **template** (`coworld-template`).
+> Canonical repository: `Metta-AI/coworld-tribal-village`.
+> Manifest path: `coworld_manifest_template.json`.
+> Build path: `Dockerfile`, `players/villager/Dockerfile`
+> Certification: blocked until this template resolves to a concrete `coworld_manifest.json` and `uv run coworld certify coworld_manifest.json` passes.
+>
+> Missing pieces:
+> - [ ] Resolve `coworld_manifest_template.json` into a concrete root `coworld_manifest.json`.
+> - [ ] Confirm buildable game and starter-player images.
+> - [ ] Run `uv run coworld certify coworld_manifest.json` and record the passing command.
+<!-- COWORLD-REPO-STATUS:END -->
+
+
+
+
 Multi‑agent RL playground in Nim with a Python wrapper (PufferLib compatible). 48 agents (8 teams, 6 per team) compete for
 resources while hostile tumors spread a freezing “clippy” tint across the map. Code: <https://github.com/Metta-AI/coworld-tribal-village>
 
