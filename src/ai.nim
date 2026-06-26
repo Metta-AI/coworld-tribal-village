@@ -6,17 +6,39 @@ import vmath
 import environment, common
 
 type
-  # Simple agent roles - six agents per team
-  AgentRole* = enum
-    Hearter    # Handles assembler/battery workflow (currently unassigned)
-    Armorer    # Wood -> Armor (currently unassigned)
-    Hunter     # Wood -> Spear -> Hunt Tumors (one per team)
-    Lighter    # Wheat -> Lantern -> Plant (four per team)
-    Farmer     # Creates fertile ground and plants wheat/trees
+  ScriptedIntentPhase* = enum
+    IntentNone,
+    IntentFrozen,
+    IntentEscape,
+    IntentDither,
+    IntentSelfHeal,
+    IntentAttack,
+    IntentPlantLantern,
+    IntentExpandLantern,
+    IntentPushLantern,
+    IntentCraftLantern,
+    IntentHarvestWheat,
+    IntentDeliverArmor,
+    IntentCraftArmor,
+    IntentCraftSpear,
+    IntentHarvestWood,
+    IntentHuntTumor,
+    IntentRetreatTumor,
+    IntentCreateFertile,
+    IntentPlantResource,
+    IntentDeliverBread,
+    IntentBakeBread,
+    IntentDepositBattery,
+    IntentUseConverter,
+    IntentMineOre,
+    IntentSearch
 
   # Minimal state tracking with spiral search
   AgentState = object
     role: AgentRole
+    intentPhase: ScriptedIntentPhase
+    intentTarget: IVec2
+    intentHasTarget: bool
     # Spiral search state
     spiralStepsInArc: int
     spiralArcsCompleted: int
@@ -41,31 +63,52 @@ proc newController*(seed: int): Controller =
     agents: initTable[int, AgentState]()
   )
 
-# Helper proc to save state and return action
-proc saveStateAndReturn(controller: Controller, agentId: int, state: AgentState, action: uint8): uint8 =
-  controller.agents[agentId] = state
+# Helper proc to save state, record the scripted intent, and return action.
+proc saveStateAndReturn(
+  controller: Controller,
+  agentId: int,
+  state: AgentState,
+  action: uint8,
+  phase: ScriptedIntentPhase = IntentNone,
+  target: IVec2 = ivec2(-1, -1)
+): uint8 =
+  var nextState = state
+  nextState.intentPhase = phase
+  nextState.intentTarget = target
+  nextState.intentHasTarget = target.x >= 0'i32 and target.y >= 0'i32
+  controller.agents[agentId] = nextState
   return action
+
+proc getScriptedIntent*(
+  controller: Controller,
+  agentId: int
+): tuple[phase: ScriptedIntentPhase, target: IVec2, hasTarget: bool] =
+  if agentId notin controller.agents:
+    return (phase: IntentNone, target: ivec2(-1, -1), hasTarget: false)
+  let state = controller.agents[agentId]
+  return (phase: state.intentPhase, target: state.intentTarget,
+      hasTarget: state.intentHasTarget)
 
 proc vecToOrientation(vec: IVec2): int =
   ## Map a step vector to orientation index (0..7)
   let x = vec.x
   let y = vec.y
-  if x == 0'i32 and y == -1'i32: return 0  # N
-  elif x == 0'i32 and y == 1'i32: return 1  # S
+  if x == 0'i32 and y == -1'i32: return 0 # N
+  elif x == 0'i32 and y == 1'i32: return 1 # S
   elif x == -1'i32 and y == 0'i32: return 2 # W
-  elif x == 1'i32 and y == 0'i32: return 3  # E
+  elif x == 1'i32 and y == 0'i32: return 3 # E
   elif x == -1'i32 and y == -1'i32: return 4 # NW
-  elif x == 1'i32 and y == -1'i32: return 5  # NE
-  elif x == -1'i32 and y == 1'i32: return 6  # SW
-  elif x == 1'i32 and y == 1'i32: return 7   # SE
+  elif x == 1'i32 and y == -1'i32: return 5 # NE
+  elif x == -1'i32 and y == 1'i32: return 6 # SW
+  elif x == 1'i32 and y == 1'i32: return 7 # SE
   else: return 0
 
 proc applyDirectionOffset(offset: var IVec2, direction: int, distance: int32) =
   case direction:
-  of 0: offset.y -= distance  # North
-  of 1: offset.x += distance  # East
-  of 2: offset.y += distance  # South
-  of 3: offset.x -= distance  # West
+  of 0: offset.y -= distance # North
+  of 1: offset.x += distance # East
+  of 2: offset.y += distance # South
+  of 3: offset.x -= distance # West
   else: discard
 
 proc clampToPlayable(pos: IVec2): IVec2 {.inline.} =
@@ -82,8 +125,8 @@ proc getNextSpiralPoint(state: var AgentState, rng: var Rand): IVec2 =
 
   # Rebuild position by simulating all steps up to current point
   for arcNum in 0 ..< state.spiralArcsCompleted:
-    let arcLen = (arcNum div 2) + 1  # 1,1,2,2,3,3,4,4...
-    let dir = arcNum mod 4  # Direction cycles 0,1,2,3 (N,E,S,W)
+    let arcLen = (arcNum div 2) + 1 # 1,1,2,2,3,3,4,4...
+    let dir = arcNum mod 4 # Direction cycles 0,1,2,3 (N,E,S,W)
     applyDirectionOffset(totalOffset, dir, int32(arcLen))
 
   # Add partial progress in current arc
@@ -104,7 +147,7 @@ proc getNextSpiralPoint(state: var AgentState, rng: var Rand): IVec2 =
 
     # Reset spiral after ~100 arcs (radius ~50) to avoid going too far
     if state.spiralArcsCompleted > 100:
-      state.spiralArcsCompleted = 0  # Reset to start of spiral
+      state.spiralArcsCompleted = 0 # Reset to start of spiral
       state.spiralStepsInArc = 1
       # Don't return to base immediately, continue spiral from current area
       state.basePosition = state.lastSearchPosition
@@ -119,11 +162,12 @@ proc findNearestThing(env: Environment, pos: IVec2, kind: ThingKind): Thing =
   for thing in env.things:
     if thing.kind == kind:
       let dist = abs(thing.pos.x - pos.x) + abs(thing.pos.y - pos.y)
-      if dist < minDist and dist < 30:  # Reasonable search radius
+      if dist < minDist and dist < 30: # Reasonable search radius
         minDist = dist
         result = thing
 
-proc findNearestThingSpiral(env: Environment, state: var AgentState, kind: ThingKind, rng: var Rand): Thing =
+proc findNearestThingSpiral(env: Environment, state: var AgentState,
+    kind: ThingKind, rng: var Rand): Thing =
   ## Find nearest thing using spiral search pattern - more systematic than random search
   # First check immediate area around current position
   result = findNearestThing(env, state.lastSearchPosition, kind)
@@ -143,7 +187,8 @@ proc findNearestThingSpiral(env: Environment, state: var AgentState, kind: Thing
   result = findNearestThing(env, nextSearchPos, kind)
   return result
 
-proc findNearestTerrain(env: Environment, pos: IVec2, terrain: TerrainType): IVec2 =
+proc findNearestTerrain(env: Environment, pos: IVec2,
+    terrain: TerrainType): IVec2 =
   result = ivec2(-1, -1)
   var minDist = 999999
   for x in max(0, pos.x - 20)..<min(MapWidth, pos.x + 21):
@@ -155,7 +200,8 @@ proc findNearestTerrain(env: Environment, pos: IVec2, terrain: TerrainType): IVe
           minDist = dist
           result = terrainPos
 
-proc findNearestEmpty(env: Environment, pos: IVec2, fertileNeeded: bool, maxRadius: int = 8): IVec2 =
+proc findNearestEmpty(env: Environment, pos: IVec2, fertileNeeded: bool,
+    maxRadius: int = 8): IVec2 =
   ## Find nearest empty, non-water tile matching fertile flag
   result = ivec2(-1, -1)
   var minDist = 999999
@@ -165,7 +211,8 @@ proc findNearestEmpty(env: Environment, pos: IVec2, fertileNeeded: bool, maxRadi
   let endY = min(MapHeight - 1, pos.y + maxRadius)
   for x in startX..endX:
     for y in startY..endY:
-      let terrainOk = if fertileNeeded: env.terrain[x][y] == Fertile else: env.terrain[x][y] == Empty
+      let terrainOk = if fertileNeeded: env.terrain[x][y] ==
+          Fertile else: env.terrain[x][y] == Empty
       if terrainOk and env.isEmpty(ivec2(x, y)):
         let dist = abs(x - pos.x) + abs(y - pos.y)
         if dist < minDist:
@@ -184,7 +231,8 @@ proc countFertileEmpty(env: Environment, center: IVec2, radius: int = 8): int =
       if env.terrain[x][y] == Fertile and env.isEmpty(ivec2(x, y)):
         inc result
 
-proc findNearestTerrainSpiral(env: Environment, state: var AgentState, terrain: TerrainType, rng: var Rand): IVec2 =
+proc findNearestTerrainSpiral(env: Environment, state: var AgentState,
+    terrain: TerrainType, rng: var Rand): IVec2 =
   ## Find terrain using spiral search pattern
   # First check from current spiral search position
   result = findNearestTerrain(env, state.lastSearchPosition, terrain)
@@ -211,11 +259,11 @@ proc getCardinalDirIndex(fromPos, toPos: IVec2): int =
 
   # Handle cardinal directions first (simpler pathfinding)
   if abs(dx) > abs(dy):
-    if dx > 0: return 3  # East
-    else: return 2       # West
+    if dx > 0: return 3 # East
+    else: return 2 # West
   else:
-    if dy > 0: return 1  # South
-    else: return 0       # North
+    if dy > 0: return 1 # South
+    else: return 0 # North
 
 proc neighborDirIndex(fromPos, toPos: IVec2): int =
   ## Orientation index (0..7) toward adjacent target (includes diagonals)
@@ -234,7 +282,8 @@ proc isValidEmptyTile(env: Environment, pos: IVec2): bool =
   pos.x >= 0 and pos.x < MapWidth and pos.y >= 0 and pos.y < MapHeight and
   env.isEmpty(pos) and env.terrain[pos.x][pos.y] != Water
 
-proc getMoveAway(env: Environment, fromPos, threatPos: IVec2, rng: var Rand): int =
+proc getMoveAway(env: Environment, fromPos, threatPos: IVec2,
+    rng: var Rand): int =
   ## Pick a step that increases distance from the threat (chebyshev), prioritizing empty tiles.
   var best: seq[IVec2] = @[]
   var bestDist = int32(-1)
@@ -251,11 +300,12 @@ proc getMoveAway(env: Environment, fromPos, threatPos: IVec2, rng: var Rand): in
       elif dist == bestDist:
         best.add(candidate)
   if best.len == 0:
-    return vecToOrientation(ivec2(0, -1))  # fallback north
+    return vecToOrientation(ivec2(0, -1)) # fallback north
   let pick = sample(rng, best)
   return vecToOrientation(pick - fromPos)
 
-proc findNearestLantern(env: Environment, pos: IVec2): tuple[pos: IVec2, found: bool, dist: int32] =
+proc findNearestLantern(env: Environment, pos: IVec2): tuple[pos: IVec2,
+    found: bool, dist: int32] =
   var best = (pos: ivec2(0, 0), found: false, dist: int32.high)
   for t in env.things:
     if t.kind == PlantedLantern:
@@ -280,7 +330,8 @@ proc spearAttackDir(agentPos: IVec2, targetPos: IVec2): int {.inline.} =
     let right = ivec2(d.y, -d.x)
     for step in 1 .. 3:
       let forward = agentPos + ivec2(d.x * step, d.y * step)
-      if forward == targetPos or forward + left == targetPos or forward + right == targetPos:
+      if forward == targetPos or forward + left == targetPos or forward +
+          right == targetPos:
         if step < bestStep:
           bestStep = step
           bestDir = dirIdx
@@ -288,7 +339,8 @@ proc spearAttackDir(agentPos: IVec2, targetPos: IVec2): int {.inline.} =
   return bestDir
 
 proc sameTeam(agentA, agentB: Thing): bool =
-  (agentA.agentId div MapAgentsPerHouse) == (agentB.agentId div MapAgentsPerHouse)
+  (agentA.agentId div MapAgentsPerHouse) == (
+      agentB.agentId div MapAgentsPerHouse)
 
 proc findAttackOpportunity(env: Environment, agent: Thing): int =
   ## Return attack orientation index if a valid target is in reach, else -1.
@@ -304,7 +356,8 @@ proc findAttackOpportunity(env: Environment, agent: Thing): int =
       # Safety: skip stale things whose grid entry was already cleared (can happen after destruction
       # but before env.things is pruned). Without this, agents may attack an empty tile where the
       # object used to live.
-      if thing.pos.x < 0 or thing.pos.x >= MapWidth or thing.pos.y < 0 or thing.pos.y >= MapHeight:
+      if thing.pos.x < 0 or thing.pos.x >= MapWidth or thing.pos.y < 0 or
+          thing.pos.y >= MapHeight:
         continue
       if env.grid[thing.pos.x][thing.pos.y] != thing:
         continue
@@ -349,7 +402,8 @@ proc findAttackOpportunity(env: Environment, agent: Thing): int =
       return dirIdx
     elif occupant.kind == Spawner and bestSpawner.dir < 0:
       bestSpawner = (dirIdx, 1)
-    elif occupant.kind == Agent and bestEnemy.dir < 0 and occupant.frozen == 0 and not sameTeam(agent, occupant):
+    elif occupant.kind == Agent and bestEnemy.dir < 0 and occupant.frozen ==
+        0 and not sameTeam(agent, occupant):
       bestEnemy = (dirIdx, 1)
 
   if bestSpawner.dir >= 0: return bestSpawner.dir
@@ -360,7 +414,8 @@ type NeedType = enum
   NeedArmor
   NeedBread
 
-proc findNearestTeammateNeeding(env: Environment, me: Thing, need: NeedType): Thing =
+proc findNearestTeammateNeeding(env: Environment, me: Thing,
+    need: NeedType): Thing =
   var best: Thing = nil
   var bestDist = int.high
   for other in env.agents:
@@ -387,7 +442,8 @@ proc isPassable(env: Environment, pos: IVec2): bool =
       return true
   return false
 
-proc getMoveTowards(env: Environment, fromPos, toPos: IVec2, rng: var Rand): int =
+proc getMoveTowards(env: Environment, fromPos, toPos: IVec2,
+    rng: var Rand): int =
   ## Get a movement direction towards target, with obstacle avoidance
   let clampedTarget = clampToPlayable(toPos)
   if clampedTarget == fromPos:
@@ -438,11 +494,11 @@ proc getMoveTowards(env: Environment, fromPos, toPos: IVec2, rng: var Rand): int
 
   # Primary blocked, try adjacent directions
   let alternatives = case primaryDir:
-    of 0: @[5, 4, 1, 3, 2]  # North blocked, try NE, NW, South, East, West
-    of 1: @[7, 6, 0, 3, 2]  # South blocked, try SE, SW, North, East, West
-    of 2: @[4, 6, 3, 0, 1]  # West blocked, try NW, SW, East, North, South
-    of 3: @[5, 7, 2, 0, 1]  # East blocked, try NE, SE, West, North, South
-    else: @[0, 1, 2, 3]     # Diagonal blocked, try cardinals
+    of 0: @[5, 4, 1, 3, 2] # North blocked, try NE, NW, South, East, West
+    of 1: @[7, 6, 0, 3, 2] # South blocked, try SE, SW, North, East, West
+    of 2: @[4, 6, 3, 0, 1] # West blocked, try NW, SW, East, North, South
+    of 3: @[5, 7, 2, 0, 1] # East blocked, try NE, SE, West, North, South
+    else: @[0, 1, 2, 3]    # Diagonal blocked, try cardinals
 
   for altDir in alternatives:
     let altMove = fromPos + directions[altDir]
@@ -453,7 +509,8 @@ proc getMoveTowards(env: Environment, fromPos, toPos: IVec2, rng: var Rand): int
   return randIntInclusive(rng, 0, 3)
 
 proc tryPlantOnFertile(controller: Controller, env: Environment, agent: Thing,
-                       agentId: int, state: var AgentState): tuple[did: bool, action: uint8] =
+                       agentId: int, state: var AgentState): tuple[did: bool,
+                           action: uint8] =
   ## If carrying wood/wheat and a fertile tile is nearby, plant; otherwise move toward it.
   if agent.inventoryWheat > 0 or agent.inventoryWood > 0:
     let fertilePos = findNearestEmpty(env, agent.pos, true)
@@ -464,49 +521,56 @@ proc tryPlantOnFertile(controller: Controller, env: Environment, agent: Thing,
         let dirIdx = getCardinalDirIndex(agent.pos, fertilePos)
         let plantArg = (if agent.inventoryWheat > 0: dirIdx else: dirIdx + 4)
         return (true, saveStateAndReturn(controller, agentId, state,
-                 encodeAction(7'u8, plantArg.uint8)))
+                 encodeAction(7'u8, plantArg.uint8), IntentPlantResource, fertilePos))
       else:
         return (true, saveStateAndReturn(controller, agentId, state,
-                 encodeAction(1'u8, getMoveTowards(env, agent.pos, fertilePos, controller.rng).uint8)))
+                 encodeAction(1'u8, getMoveTowards(env, agent.pos, fertilePos,
+                     controller.rng).uint8),
+                 IntentPlantResource, fertilePos))
   return (false, 0'u8)
 
 proc moveNextSearch(controller: Controller, env: Environment, agent: Thing, agentId: int,
                     state: var AgentState): uint8 =
   let nextSearchPos = getNextSpiralPoint(state, controller.rng)
   return saveStateAndReturn(controller, agentId, state,
-    encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos, controller.rng).uint8))
+    encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos,
+        controller.rng).uint8),
+    IntentSearch, nextSearchPos)
 
 proc useOrMove(controller: Controller, env: Environment, agent: Thing, agentId: int,
-               state: var AgentState, targetPos: IVec2): uint8 =
+               state: var AgentState, targetPos: IVec2,
+                   phase: ScriptedIntentPhase): uint8 =
   let dx = abs(targetPos.x - agent.pos.x)
   let dy = abs(targetPos.y - agent.pos.y)
   if max(dx, dy) == 1'i32:
     return saveStateAndReturn(controller, agentId, state,
-      encodeAction(3'u8, neighborDirIndex(agent.pos, targetPos).uint8))
+      encodeAction(3'u8, neighborDirIndex(agent.pos, targetPos).uint8), phase, targetPos)
   return saveStateAndReturn(controller, agentId, state,
-    encodeAction(1'u8, getMoveTowards(env, agent.pos, targetPos, controller.rng).uint8))
+    encodeAction(1'u8, getMoveTowards(env, agent.pos, targetPos,
+        controller.rng).uint8), phase, targetPos)
 
 proc findAndUseBuilding(controller: Controller, env: Environment, agent: Thing, agentId: int,
-                        state: var AgentState, kind: ThingKind): tuple[did: bool, action: uint8] =
+                        state: var AgentState, kind: ThingKind,
+                        phase: ScriptedIntentPhase): tuple[did: bool,
+                            action: uint8] =
   let b = env.findNearestThingSpiral(state, kind, controller.rng)
   if b != nil:
-    return (true, controller.useOrMove(env, agent, agentId, state, b.pos))
+    return (true, controller.useOrMove(env, agent, agentId, state, b.pos, phase))
   (true, controller.moveNextSearch(env, agent, agentId, state))
 
 proc findAndHarvest(controller: Controller, env: Environment, agent: Thing, agentId: int,
-                    state: var AgentState, terrain: TerrainType): tuple[did: bool, action: uint8] =
+                    state: var AgentState, terrain: TerrainType,
+                    phase: ScriptedIntentPhase): tuple[did: bool,
+                        action: uint8] =
   let pos = env.findNearestTerrainSpiral(state, terrain, controller.rng)
   if pos.x >= 0:
-    return (true, controller.useOrMove(env, agent, agentId, state, pos))
+    return (true, controller.useOrMove(env, agent, agentId, state, pos, phase))
   (true, controller.moveNextSearch(env, agent, agentId, state))
 
 
-proc decideAction*(controller: Controller, env: Environment, agentId: int): uint8 =
+proc decideAction*(controller: Controller, env: Environment,
+    agentId: int): uint8 =
   let agent = env.agents[agentId]
-
-  # Skip frozen agents
-  if agent.frozen > 0:
-    return encodeAction(0'u8, 0'u8)
 
   # Initialize agent role if needed (per-house pattern, 6 agents per house)
   if agentId notin controller.agents:
@@ -515,17 +579,11 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     # farmer sustains the wheat supply. No slot banks respawn hearts - eval
     # shows lantern throughput from a fourth Lighter outscores the respawns
     # the initial 5 assembler hearts already cover (1030 vs 947 team-mean).
-    let role = case agentId mod MapAgentsPerHouse:  # MapAgentsPerHouse = 6
-      of 0: Lighter
-      of 1: Lighter
-      of 2: Hunter
-      of 3: Lighter
-      of 4: Lighter
-      of 5: Farmer
-      else: Hearter
-
     controller.agents[agentId] = AgentState(
-      role: role,
+      role: scriptedAgentRole(agentId),
+      intentPhase: IntentNone,
+      intentTarget: ivec2(-1, -1),
+      intentHasTarget: false,
       spiralStepsInArc: 0,
       spiralArcsCompleted: 0,
       basePosition: agent.pos,
@@ -539,6 +597,11 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     )
 
   var state = controller.agents[agentId]
+
+  # Skip frozen agents while clearing any stale target from the previous tick.
+  if agent.frozen > 0:
+    return saveStateAndReturn(controller, agentId, state, encodeAction(0'u8,
+        0'u8), IntentFrozen)
 
   # --- Simple bail-out and dithering to avoid getting stuck/oscillation ---
   # Update recent positions history (size 4)
@@ -583,9 +646,9 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
   # If in escape mode, try to move in escape direction for a few steps
   if state.escapeMode and state.escapeStepsRemaining > 0:
     let tryDirs = @[state.escapeDirection,
-                    ivec2(state.escapeDirection.y, -state.escapeDirection.x),  # perpendicular 1
-                    ivec2(-state.escapeDirection.y, state.escapeDirection.x),  # perpendicular 2
-                    ivec2(-state.escapeDirection.x, -state.escapeDirection.y)] # opposite
+                    ivec2(state.escapeDirection.y, -state.escapeDirection.x), # perpendicular 1
+      ivec2(-state.escapeDirection.y, state.escapeDirection.x),  # perpendicular 2
+      ivec2(-state.escapeDirection.x, -state.escapeDirection.y)] # opposite
     for d in tryDirs:
       let np = agent.pos + d
       if env.isEmpty(np):
@@ -594,7 +657,9 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
           state.escapeMode = false
           state.stuckCounter = 0
         state.lastPosition = agent.pos
-        return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, vecToOrientation(d).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(1'u8, vecToOrientation(d).uint8), IntentEscape, np)
     # If all blocked, drop out of escape for this tick
     state.escapeMode = false
     state.stuckCounter = 0
@@ -613,7 +678,10 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     for d in candidates:
       if isPassable(env, agent.pos + d):
         state.lastPosition = agent.pos
-        return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, vecToOrientation(d).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(1'u8, vecToOrientation(d).uint8), IntentDither,
+              agent.pos + d)
 
   # From here on, ensure lastPosition is updated this tick regardless of branch
   state.lastPosition = agent.pos
@@ -622,18 +690,23 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
 
   # Emergency self-heal: eat bread if below half HP (applies to all roles)
   if agent.inventoryBread > 0 and agent.hp * 2 < agent.maxHp:
-    let healDirs = @[ivec2(0, -1), ivec2(1, 0), ivec2(0, 1), ivec2(-1, 0),  # cardinals first
-                     ivec2(1, -1), ivec2(1, 1), ivec2(-1, 1), ivec2(-1, -1)] # diagonals
+    let healDirs = @[ivec2(0, -1), ivec2(1, 0), ivec2(0, 1), ivec2(-1, 0), # cardinals first
+      ivec2(1, -1), ivec2(1, 1), ivec2(-1, 1), ivec2(-1, -1)] # diagonals
     for d in healDirs:
       let target = agent.pos + d
       if isValidEmptyTile(env, target):
         return saveStateAndReturn(
           controller, agentId, state,
-          encodeAction(3'u8, neighborDirIndex(agent.pos, target).uint8))
+          encodeAction(3'u8, neighborDirIndex(agent.pos, target).uint8),
+              IntentSelfHeal, target)
 
   let attackDir = findAttackOpportunity(env, agent)
   if attackDir >= 0:
-    return saveStateAndReturn(controller, agentId, state, encodeAction(2'u8, attackDir.uint8))
+    let attackDelta = getOrientationDelta(Orientation(attackDir))
+    let attackTarget = agent.pos + ivec2(attackDelta.x, attackDelta.y)
+    return saveStateAndReturn(
+      controller, agentId, state, encodeAction(2'u8, attackDir.uint8),
+          IntentAttack, attackTarget)
 
   # Role-based decision making
   case state.role:
@@ -641,7 +714,8 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
   of Lighter:
     # Priority 1: Plant lanterns outward from home without stranding carried lanterns.
     if agent.inventoryLantern > 0:
-      let center = if agent.homeassembler.x >= 0: agent.homeassembler else: agent.pos
+      let center = if agent.homeassembler.x >=
+          0: agent.homeassembler else: agent.pos
       var bestDir = -1
       var bestDist = int32.low
       for i in 0 .. 7:
@@ -660,31 +734,46 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
             bestDist = dist
             bestDir = i
       if bestDir >= 0:
-        return saveStateAndReturn(controller, agentId, state, encodeAction(6'u8, bestDir.uint8))
+        let target = agent.pos + orientationToVec(Orientation(bestDir))
+        return saveStateAndReturn(
+          controller, agentId, state, encodeAction(6'u8, bestDir.uint8),
+              IntentPlantLantern, target)
 
       let awayFromCenter = getMoveAway(env, agent.pos, center, controller.rng)
-      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, awayFromCenter.uint8))
+      let target = agent.pos + orientationToVec(Orientation(awayFromCenter))
+      return saveStateAndReturn(
+        controller, agentId, state, encodeAction(1'u8, awayFromCenter.uint8),
+            IntentExpandLantern, target)
 
     # Priority 2: If adjacent to an existing lantern without one to plant, push it further away
     elif isAdjacentToLantern(env, agent.pos):
       let near = findNearestLantern(env, agent.pos)
       if near.found and near.dist == 1'i32:
         # Move into the lantern tile to push it (env will relocate; we bias pushing away in moveAction)
-        return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, neighborDirIndex(agent.pos, near.pos).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(1'u8, neighborDirIndex(agent.pos, near.pos).uint8),
+              IntentPushLantern, near.pos)
       # If diagonally close, step to set up a push next
       let dx = near.pos.x - agent.pos.x
       let dy = near.pos.y - agent.pos.y
-      let step = agent.pos + ivec2((if dx != 0: dx div abs(dx) else: 0'i32), (if dy != 0: dy div abs(dy) else: 0'i32))
-      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, neighborDirIndex(agent.pos, step).uint8))
+      let step = agent.pos + ivec2((if dx != 0: dx div abs(dx) else: 0'i32), (
+          if dy != 0: dy div abs(dy) else: 0'i32))
+      return saveStateAndReturn(
+        controller, agentId, state,
+        encodeAction(1'u8, neighborDirIndex(agent.pos, step).uint8),
+            IntentPushLantern, near.pos)
 
     # Priority 3: Craft lantern if we have wheat
     if agent.inventoryWheat > 0:
-      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, WeavingLoom)
+      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state,
+          WeavingLoom, IntentCraftLantern)
       if did: return act
 
     # Priority 4: Collect wheat using spiral search
     else:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
+      let (did, act) = controller.findAndHarvest(env, agent, agentId, state,
+          Wheat, IntentHarvestWheat)
       if did: return act
 
   of Armorer:
@@ -696,18 +785,27 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
         let dy = abs(teammate.pos.y - agent.pos.y)
         if max(dx, dy) == 1'i32:
           # Give armor via PUT to teammate
-          return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammate.pos).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(5'u8, neighborDirIndex(agent.pos, teammate.pos).uint8),
+            IntentDeliverArmor, teammate.pos)
         else:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammate.pos, controller.rng).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(1'u8, getMoveTowards(env, agent.pos, teammate.pos,
+                controller.rng).uint8),
+            IntentDeliverArmor, teammate.pos)
 
     # Priority 2: Craft armor if we have wood
     if agent.inventoryWood > 0:
-      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, Armory)
+      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state,
+          Armory, IntentCraftArmor)
       if did: return act
 
     # Priority 3: Collect wood using spiral search
     else:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Tree)
+      let (did, act) = controller.findAndHarvest(env, agent, agentId, state,
+          Tree, IntentHarvestWood)
       if did: return act
 
   of Hunter:
@@ -717,9 +815,15 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       if tumor != nil:
         let orientIdx = spearAttackDir(agent.pos, tumor.pos)
         if orientIdx >= 0:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(2'u8, orientIdx.uint8))
+          return saveStateAndReturn(
+            controller, agentId, state, encodeAction(2'u8, orientIdx.uint8),
+                IntentHuntTumor, tumor.pos)
         else:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, tumor.pos, controller.rng).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(1'u8, getMoveTowards(env, agent.pos, tumor.pos,
+                controller.rng).uint8),
+            IntentHuntTumor, tumor.pos)
       else:
         # No clippies found, continue spiral search for hunting
         return controller.moveNextSearch(env, agent, agentId, state)
@@ -728,16 +832,21 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
     let nearbyTumor = env.findNearestThingSpiral(state, Tumor, controller.rng)
     if nearbyTumor != nil and chebyshevDist(agent.pos, nearbyTumor.pos) <= 3:
       let awayDir = getMoveAway(env, agent.pos, nearbyTumor.pos, controller.rng)
-      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, awayDir.uint8))
+      let target = agent.pos + orientationToVec(Orientation(awayDir))
+      return saveStateAndReturn(
+        controller, agentId, state, encodeAction(1'u8, awayDir.uint8),
+            IntentRetreatTumor, target)
 
     # Priority 3: Craft spear if we have wood
     if agent.inventoryWood > 0:
-      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, Forge)
+      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state,
+          Forge, IntentCraftSpear)
       if did: return act
 
     # Priority 4: Collect wood using spiral search
     else:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Tree)
+      let (did, act) = controller.findAndHarvest(env, agent, agentId, state,
+          Tree, IntentHarvestWood)
       if did: return act
 
   of Farmer:
@@ -749,21 +858,37 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let wateringPos = findNearestEmpty(env, agent.pos, false, 8)
       if wateringPos.x >= 0:
         if agent.inventoryWater == 0:
-          let waterPos = env.findNearestTerrainSpiral(state, Water, controller.rng)
+          let waterPos = env.findNearestTerrainSpiral(state, Water,
+              controller.rng)
           if waterPos.x >= 0:
             let dx = abs(waterPos.x - agent.pos.x)
             let dy = abs(waterPos.y - agent.pos.y)
             if max(dx, dy) == 1'i32:
-              return saveStateAndReturn(controller, agentId, state, encodeAction(3'u8, neighborDirIndex(agent.pos, waterPos).uint8))
+              return saveStateAndReturn(
+                controller, agentId, state,
+                encodeAction(3'u8, neighborDirIndex(agent.pos, waterPos).uint8),
+                IntentCreateFertile, waterPos)
             else:
-              return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, waterPos, controller.rng).uint8))
+              return saveStateAndReturn(
+                controller, agentId, state,
+                encodeAction(1'u8, getMoveTowards(env, agent.pos, waterPos,
+                    controller.rng).uint8),
+                IntentCreateFertile, waterPos)
         else:
           let dx = abs(wateringPos.x - agent.pos.x)
           let dy = abs(wateringPos.y - agent.pos.y)
           if max(dx, dy) == 1'i32:
-            return saveStateAndReturn(controller, agentId, state, encodeAction(3'u8, neighborDirIndex(agent.pos, wateringPos).uint8))
+            return saveStateAndReturn(
+              controller, agentId, state,
+              encodeAction(3'u8, neighborDirIndex(agent.pos,
+                  wateringPos).uint8),
+              IntentCreateFertile, wateringPos)
           else:
-            return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, wateringPos, controller.rng).uint8))
+            return saveStateAndReturn(
+              controller, agentId, state,
+              encodeAction(1'u8, getMoveTowards(env, agent.pos, wateringPos,
+                  controller.rng).uint8),
+              IntentCreateFertile, wateringPos)
 
       return controller.moveNextSearch(env, agent, agentId, state)
 
@@ -779,20 +904,31 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
       let dx = abs(teammateNeedingBread.pos.x - agent.pos.x)
       let dy = abs(teammateNeedingBread.pos.y - agent.pos.y)
       if max(dx, dy) == 1'i32:
-        return saveStateAndReturn(controller, agentId, state, encodeAction(5'u8, neighborDirIndex(agent.pos, teammateNeedingBread.pos).uint8))
-      return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, teammateNeedingBread.pos, controller.rng).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(5'u8, neighborDirIndex(agent.pos,
+              teammateNeedingBread.pos).uint8),
+          IntentDeliverBread, teammateNeedingBread.pos)
+      return saveStateAndReturn(
+        controller, agentId, state,
+        encodeAction(1'u8, getMoveTowards(env, agent.pos,
+            teammateNeedingBread.pos, controller.rng).uint8),
+        IntentDeliverBread, teammateNeedingBread.pos)
 
     if teammateNeedingBread != nil and agent.inventoryWheat > 0:
-      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state, ClayOven)
+      let (did, act) = controller.findAndUseBuilding(env, agent, agentId, state,
+          ClayOven, IntentBakeBread)
       if did: return act
 
     # Step 4: Gather resources to plant or bake (wood then wheat)
     if agent.inventoryWood == 0:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Tree)
+      let (did, act) = controller.findAndHarvest(env, agent, agentId, state,
+          Tree, IntentHarvestWood)
       if did: return act
 
     if agent.inventoryWheat == 0:
-      let (did, act) = controller.findAndHarvest(env, agent, agentId, state, Wheat)
+      let (did, act) = controller.findAndHarvest(env, agent, agentId, state,
+          Wheat, IntentHarvestWheat)
       if did: return act
 
     # Step 5: If stocked but couldn't plant (no fertile nearby), roam to expand search
@@ -807,25 +943,45 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
           let dx = abs(thing.pos.x - agent.pos.x)
           let dy = abs(thing.pos.y - agent.pos.y)
           if max(dx, dy) == 1'i32:
-            return saveStateAndReturn(controller, agentId, state, encodeAction(3'u8, neighborDirIndex(agent.pos, thing.pos).uint8))
+            return saveStateAndReturn(
+              controller, agentId, state,
+              encodeAction(3'u8, neighborDirIndex(agent.pos, thing.pos).uint8),
+              IntentDepositBattery, thing.pos)
           else:
-            return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, thing.pos, controller.rng).uint8))
+            return saveStateAndReturn(
+              controller, agentId, state,
+              encodeAction(1'u8, getMoveTowards(env, agent.pos, thing.pos,
+                  controller.rng).uint8),
+              IntentDepositBattery, thing.pos)
 
     elif agent.inventoryOre > 0:
       # Find converter and make battery using spiral search
-      let converterThing = env.findNearestThingSpiral(state, Converter, controller.rng)
+      let converterThing = env.findNearestThingSpiral(state, Converter,
+          controller.rng)
       if converterThing != nil:
         # Converter uses GET to consume ore and produce battery
         let dx = abs(converterThing.pos.x - agent.pos.x)
         let dy = abs(converterThing.pos.y - agent.pos.y)
         if max(dx, dy) == 1'i32:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(3'u8, neighborDirIndex(agent.pos, converterThing.pos).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(3'u8, neighborDirIndex(agent.pos,
+                converterThing.pos).uint8),
+            IntentUseConverter, converterThing.pos)
         else:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, converterThing.pos, controller.rng).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(1'u8, getMoveTowards(env, agent.pos,
+                converterThing.pos, controller.rng).uint8),
+            IntentUseConverter, converterThing.pos)
       else:
         # No converter found, continue spiral search
         let nextSearchPos = getNextSpiralPoint(state, controller.rng)
-        return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos, controller.rng).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos,
+              controller.rng).uint8),
+          IntentUseConverter, nextSearchPos)
 
     else:
       # Find mine and collect ore using spiral search
@@ -834,17 +990,30 @@ proc decideAction*(controller: Controller, env: Environment, agentId: int): uint
         let dx = abs(mine.pos.x - agent.pos.x)
         let dy = abs(mine.pos.y - agent.pos.y)
         if max(dx, dy) == 1'i32:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(3'u8, neighborDirIndex(agent.pos, mine.pos).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(3'u8, neighborDirIndex(agent.pos, mine.pos).uint8),
+                IntentMineOre, mine.pos)
         else:
-          return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, mine.pos, controller.rng).uint8))
+          return saveStateAndReturn(
+            controller, agentId, state,
+            encodeAction(1'u8, getMoveTowards(env, agent.pos, mine.pos,
+                controller.rng).uint8),
+            IntentMineOre, mine.pos)
       else:
         # No mine found, continue spiral search
         let nextSearchPos = getNextSpiralPoint(state, controller.rng)
-        return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos, controller.rng).uint8))
+        return saveStateAndReturn(
+          controller, agentId, state,
+          encodeAction(1'u8, getMoveTowards(env, agent.pos, nextSearchPos,
+              controller.rng).uint8),
+          IntentMineOre, nextSearchPos)
 
   # Save last position for next tick and return a default random move
   state.lastPosition = agent.pos
-  return saveStateAndReturn(controller, agentId, state, encodeAction(1'u8, randIntInclusive(controller.rng, 0, 7).uint8))
+  return saveStateAndReturn(
+    controller, agentId, state, encodeAction(1'u8, randIntInclusive(
+        controller.rng, 0, 7).uint8), IntentSearch)
 
 # Compatibility function for updateController
 proc updateController*(controller: Controller) =
