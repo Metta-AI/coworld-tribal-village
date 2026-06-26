@@ -67,23 +67,23 @@ proc environmentFromPointer(env: pointer): Environment =
 
 const thingRenderColors: array[ThingKind, tuple[r, g, b: uint8]] = [
   # Matches previous hardcoded RGB choices for renderer export.
-  (r: 255'u8, g: 255'u8, b: 0'u8),    # Agent
-  (r: 96'u8,  g: 96'u8,  b: 96'u8),   # Wall
-  (r: 184'u8, g: 134'u8, b: 11'u8),   # Mine
-  (r: 0'u8,   g: 200'u8, b: 200'u8),  # Converter
-  (r: 220'u8, g: 0'u8,   b: 220'u8),  # assembler
-  (r: 255'u8, g: 170'u8, b: 0'u8),    # Spawner
-  (r: 160'u8, g: 32'u8,  b: 240'u8),  # Tumor
-  (r: 255'u8, g: 120'u8, b: 40'u8),   # Armory
-  (r: 255'u8, g: 80'u8,  b: 0'u8),    # Forge
-  (r: 255'u8, g: 180'u8, b: 120'u8),  # ClayOven
-  (r: 0'u8,   g: 180'u8, b: 255'u8),  # WeavingLoom
-  (r: 255'u8, g: 240'u8, b: 128'u8)   # PlantedLantern
+  (r: 255'u8, g: 255'u8, b: 0'u8),   # Agent
+  (r: 96'u8, g: 96'u8, b: 96'u8),    # Wall
+  (r: 184'u8, g: 134'u8, b: 11'u8),  # Mine
+  (r: 0'u8, g: 200'u8, b: 200'u8),   # Converter
+  (r: 220'u8, g: 0'u8, b: 220'u8),   # assembler
+  (r: 255'u8, g: 170'u8, b: 0'u8),   # Spawner
+  (r: 160'u8, g: 32'u8, b: 240'u8),  # Tumor
+  (r: 255'u8, g: 120'u8, b: 40'u8),  # Armory
+  (r: 255'u8, g: 80'u8, b: 0'u8),    # Forge
+  (r: 255'u8, g: 180'u8, b: 120'u8), # ClayOven
+  (r: 0'u8, g: 180'u8, b: 255'u8),   # WeavingLoom
+  (r: 255'u8, g: 240'u8, b: 128'u8)  # PlantedLantern
 ]
 
 const CoworldCellStride* = 28
 const CoworldNoThing* = 255'u8
-const TrainingAgentStride* = 23
+const TrainingAgentStride* = 27
 const TrainingObjectStride* = 5
 const TrainingKindTerrainWater* = 100'i32
 const TrainingKindTerrainWheat* = 101'i32
@@ -133,7 +133,7 @@ proc tribal_village_set_config(
 
 proc tribal_village_reset_and_get_obs(
   env: pointer,
-  obs_buffer: ptr UncheckedArray[uint8],    # [60, 21, 11, 11] direct
+  obs_buffer: ptr UncheckedArray[uint8], # [60, 21, 11, 11] direct
   rewards_buffer: ptr UncheckedArray[float32],
   terminals_buffer: ptr UncheckedArray[uint8],
   truncations_buffer: ptr UncheckedArray[uint8]
@@ -185,8 +185,8 @@ proc tribal_village_reset_for_coworld(
 
 proc tribal_village_step_with_pointers(
   env: pointer,
-  actions_buffer: ptr UncheckedArray[uint8],    # [MapAgents] direct read
-  obs_buffer: ptr UncheckedArray[uint8],        # [60, 21, 11, 11] direct write
+  actions_buffer: ptr UncheckedArray[uint8], # [MapAgents] direct read
+  obs_buffer: ptr UncheckedArray[uint8], # [60, 21, 11, 11] direct write
   rewards_buffer: ptr UncheckedArray[float32],
   terminals_buffer: ptr UncheckedArray[uint8],
   truncations_buffer: ptr UncheckedArray[uint8]
@@ -469,7 +469,8 @@ proc tribal_village_export_training_state(
   ## Agent rows: x, y, alive, team, ore, battery, water, wheat, wood,
   ## spear, lantern, armor, bread, action_invalid, action_noop, action_move,
   ## action_attack, action_use, action_swap, action_put, action_plant,
-  ## action_plant_resource, scripted_role.
+  ## action_plant_resource, scripted_role, scripted_phase, scripted_target_x,
+  ## scripted_target_y, scripted_target_valid.
   ## Object rows: kind, x, y, value, team.
   ## - assembler value is hearts
   ## - mine value is resources
@@ -477,7 +478,8 @@ proc tribal_village_export_training_state(
   ## - terrain pseudo-kinds use 100=water, 101=wheat, 102=tree, 103=fertile;
   ##   value is 1 when the tile is empty/passable for interaction
   let envObj = environmentFromPointer(env)
-  if envObj == nil or agent_buffer.isNil or object_buffer.isNil or object_count.isNil:
+  if envObj == nil or agent_buffer.isNil or object_buffer.isNil or
+      object_count.isNil:
     return 0
 
   let requiredAgentLen = MapAgents * TrainingAgentStride
@@ -528,9 +530,26 @@ proc tribal_village_export_training_state(
         agent_buffer[base + 20] = stats.actionPlant.int32
         agent_buffer[base + 21] = stats.actionPlantResource.int32
       agent_buffer[base + 22] = ord(scriptedAgentRole(agentId)).int32
+      if env in coworldBuiltinAiByEnv:
+        let intent = coworldBuiltinAiByEnv[env].getScriptedIntent(agentId)
+        agent_buffer[base + 23] = ord(intent.phase).int32
+        if intent.hasTarget:
+          agent_buffer[base + 24] = intent.target.x.int32
+          agent_buffer[base + 25] = intent.target.y.int32
+          agent_buffer[base + 26] = 1'i32
+        else:
+          agent_buffer[base + 24] = -1'i32
+          agent_buffer[base + 25] = -1'i32
+          agent_buffer[base + 26] = 0'i32
+      else:
+        agent_buffer[base + 23] = ord(IntentNone).int32
+        agent_buffer[base + 24] = -1'i32
+        agent_buffer[base + 25] = -1'i32
+        agent_buffer[base + 26] = 0'i32
 
     var rows = 0
-    template addObject(kindValue: int32, xValue: int32, yValue: int32, value: int32, team: int32) =
+    template addObject(kindValue: int32, xValue: int32, yValue: int32,
+        value: int32, team: int32) =
       let base = rows * TrainingObjectStride
       if base + TrainingObjectStride > object_len.int:
         return 0
@@ -546,17 +565,20 @@ proc tribal_village_export_training_state(
         continue
       case thing.kind
       of Mine:
-        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, thing.resources.int32, 0'i32)
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32,
+            thing.resources.int32, 0'i32)
       of Converter, assembler, Spawner, Tumor, Armory, Forge, ClayOven, WeavingLoom:
         let value =
           if thing.kind == assembler:
             thing.hearts.int32
           else:
             0'i32
-        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, value, 0'i32)
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32,
+            value, 0'i32)
       of PlantedLantern:
         let healthy = if thing.lanternHealthy: 1'i32 else: 0'i32
-        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32, healthy, thing.teamId.int32)
+        addObject(ord(thing.kind).int32, thing.pos.x.int32, thing.pos.y.int32,
+            healthy, thing.teamId.int32)
       else:
         discard
 
@@ -652,11 +674,11 @@ proc tribal_village_render_ansi(
     return 0
 
   try:
-    let s = render(envObj)  # environment.render*(env: Environment): string
+    let s = render(envObj) # environment.render*(env: Environment): string
     let n = min(s.len, max(0, buf_len - 1).int)
     if n > 0:
       copyMem(out_buffer, cast[pointer](s.cstring), n)
-    out_buffer[n] = '\0'  # null-terminate
+    out_buffer[n] = '\0' # null-terminate
     return n.int32
   except:
     return 0

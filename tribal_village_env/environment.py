@@ -17,7 +17,7 @@ import pufferlib
 ACTION_VERB_COUNT = 8
 ACTION_ARGUMENT_COUNT = 8
 ACTION_SPACE_SIZE = ACTION_VERB_COUNT * ACTION_ARGUMENT_COUNT
-TRAINING_AGENT_STRIDE = 23
+TRAINING_AGENT_STRIDE = 27
 TRAINING_OBJECT_STRIDE = 5
 TRAINING_AGENT_ACTION_STAT_OFFSET = 13
 TRAINING_AGENT_ACTION_STAT_NAMES = (
@@ -143,6 +143,7 @@ class TribalVillageEnv(pufferlib.PufferEnv):
 
         # Only allocate actions buffer (input to environment)
         self.actions_buffer = np.zeros(self.total_agents, dtype=np.uint8)
+        self.builtin_ai_action_buffer = np.zeros(self.total_agents, dtype=np.uint8)
         self.valid_action_mask_buffer = np.zeros(
             self.total_agents * ACTION_SPACE_SIZE, dtype=np.uint8
         )
@@ -248,6 +249,18 @@ class TribalVillageEnv(pufferlib.PufferEnv):
             (
                 "tribal_village_valid_action_mask",
                 [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int32],
+                ctypes.c_int32,
+                True,
+            ),
+            (
+                "tribal_village_reset_builtin_ai",
+                [ctypes.c_void_p, ctypes.c_int32],
+                ctypes.c_int32,
+                True,
+            ),
+            (
+                "tribal_village_builtin_ai_actions",
+                [ctypes.c_void_p, ctypes.c_void_p],
                 ctypes.c_int32,
                 True,
             ),
@@ -453,6 +466,28 @@ class TribalVillageEnv(pufferlib.PufferEnv):
             self.total_agents,
             ACTION_SPACE_SIZE,
         ).astype(bool, copy=True)
+
+    def reset_builtin_ai(self, *, seed: int) -> None:
+        """Reset the native scripted controller used for teacher labels."""
+        func = getattr(self.lib, "tribal_village_reset_builtin_ai", None)
+        if func is None:
+            raise AttributeError("Nim library does not export tribal_village_reset_builtin_ai")
+        success = func(self.env_ptr, ctypes.c_int32(seed))
+        if not success:
+            raise RuntimeError("Failed to reset builtin AI")
+
+    def builtin_ai_actions(self) -> np.ndarray:
+        """Return one native scripted-controller action per agent."""
+        func = getattr(self.lib, "tribal_village_builtin_ai_actions", None)
+        if func is None:
+            raise AttributeError("Nim library does not export tribal_village_builtin_ai_actions")
+        success = func(
+            self.env_ptr,
+            self.builtin_ai_action_buffer.ctypes.data_as(ctypes.c_void_p),
+        )
+        if not success:
+            raise RuntimeError("Failed to export builtin AI actions")
+        return self.builtin_ai_action_buffer.astype(np.int64, copy=True)
 
     def close(self):
         """Clean up the environment."""
