@@ -61,9 +61,9 @@ Tribal Village now ships a Coworld package surface with 48 player slots, one slo
 current `coworld` CLI from the Metta repository:
 
 ```bash
-uv run coworld build compose.yaml coworld_manifest_template.json 0.1.0 tmp/tribal_village/coworld_manifest.json
-uv run coworld certify tmp/tribal_village/coworld_manifest.json
-uv run coworld play tmp/tribal_village/coworld_manifest.json
+uv run coworld build --version 0.1.28
+uv run coworld certify dist/coworld_manifest.json
+uv run coworld play dist/coworld_manifest.json
 ```
 
 The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
