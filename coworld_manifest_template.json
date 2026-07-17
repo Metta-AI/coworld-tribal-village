@@ -12,7 +12,7 @@
         "-m",
         "tribal_village_env.coworld.server"
       ],
-      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/6683204b649732bf9bded795d3634ff1552602c3"
+      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main"
     },
     "config_schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -163,7 +163,7 @@
       "run": [
         "/bin/villager"
       ],
-      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/6683204b649732bf9bded795d3634ff1552602c3/players/villager",
+      "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main/players/villager",
       "description": "Bundled native Nim player that mirrors the episode deterministically and replays the built-in role-based scripted AI through the Coworld player WebSocket."
     }
   ],
