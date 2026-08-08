@@ -1,0 +1,14 @@
+{
+  "league_id": "league_aedc4933-a75a-40ab-aaef-1653e0796875",
+  "competition_division_id": "div_60d931c6-0d6d-483c-9a51-bf33f36016b7",
+  "legacy_qualifier_division_id": "div_87ebea85-52ca-42ef-a5c3-555f3db373e5",
+  "manifest_path": "coworld_manifest_template.json",
+  "variant_id": "8-teams",
+  "seat_count": 48,
+  "topology": {
+    "kind": "team_blocks",
+    "team_count": 8,
+    "seats_per_team": 6
+  },
+  "admission": "direct_competition"
+}

@@ -16,8 +16,10 @@ ladder:
   scheduler:
     strategy: clone_fill
     insufficient_players: do_not_run
+    seat_count: 48
     episodes_per_entrant: 1
     clone_score_aggregation: mean
+    variant_rotation: [8-teams]
   ranking:
     algorithm: score
     round_scoring_rule: mean
@@ -37,6 +39,14 @@ Clone seats are not fillers: all authored seat scores collapse to one credited
 episode score for the champion. Marking clones as filler would silently rank an
 arbitrary single seat and is forbidden.
 
+`platform_commissioner/settings.staged.json` and `settings.active.json` are
+complete settings-API payloads and differ only at `ladder.enabled`. The explicit
+48-seat count and single-variant rotation prevent the league's 18-seat default
+variant from being resized without also updating `team_count`. `contract.json`
+pins the live IDs and asserts the 8×6 topology against the manifest. The
+repository validator checks all three artifacts against Metta's current
+schemas.
+
 ## Proof and cutover
 
 1. Land `clone_fill` planner and score-collapse replay-idempotency tests in
@@ -44,12 +54,18 @@ arbitrary single seat and is forbidden.
 2. Hosted-smoke a full 48-seat self-play episode from the canonical manifest.
 3. Compare frozen platform and container plans for one and three champions,
    including score aggregation and failure attribution.
-4. Decide whether the container completion qualifier becomes platform generic
-   qualification or direct Competition placement; then archive Qualifiers only
-   after the chosen path works.
+4. Route a test submission directly to Competition and confirm no qualification
+   experience is created; archive Qualifiers only after this succeeds.
 5. Write/read settings disabled, pause/drain, patch the full seed overrides to
    platform, enable/unpause, and prove one Temporal cycle and EWMA update.
 
 Standings restart. Rollback drains Temporal, disables the ladder, restores the
 seed to `container`, and proves a container round before unpausing. The bundled
 commissioner remains available through soak.
+
+Run the repository-owned contract check locally with:
+
+```bash
+uv run --no-project --with pydantic --with jsonschema \
+  python scripts/validate_platform_commissioner.py --metta-root ../metta
+```

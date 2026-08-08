@@ -1,0 +1,28 @@
+{
+  "round_interval_minutes": 30,
+  "ladder": {
+    "enabled": true,
+    "scheduler": {
+      "strategy": "clone_fill",
+      "insufficient_players": "do_not_run",
+      "seat_count": 48,
+      "episodes_per_entrant": 1,
+      "clone_score_aggregation": "mean",
+      "variant_rotation": ["8-teams"]
+    },
+    "ranking": {
+      "algorithm": "score",
+      "round_scoring_rule": "mean",
+      "standing_aggregation": "ewma",
+      "half_life_hours": 2
+    },
+    "fulfillment": {"allowed_failures": 0.05, "retry_times": 2},
+    "divisions": [
+      {
+        "division_id": "div_60d931c6-0d6d-483c-9a51-bf33f36016b7",
+        "name": "Competition",
+        "disqualify_after_consecutive_failures": 3
+      }
+    ]
+  }
+}
