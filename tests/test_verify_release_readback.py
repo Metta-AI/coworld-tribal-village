@@ -4,6 +4,7 @@ import unittest
 
 from scripts.verify_release_readback import (
     resolve_exact_canonical,
+    verify_artifact_readback,
     verify_release_readback,
 )
 
@@ -85,6 +86,40 @@ class ReleaseReadbackTest(unittest.TestCase):
         episodes[0]["status"] = "failed"
         with self.assertRaisesRegex(ValueError, "hosted smoke is not clean"):
             verify_release_readback(coworld_list(), status, name=NAME, version=VERSION)
+
+    def test_accepts_exact_stored_sources_and_image_content(self) -> None:
+        source = (
+            "https://github.com/Metta-AI/coworld-tribal-village/tree/" + "a" * 40
+        )
+        expected = {
+            "game": {
+                "runnable": {
+                    "image": "tribal-village:built",
+                    "source_url": source,
+                }
+            }
+        }
+        stored_image = "public.ecr.aws/coworld/game@sha256:registry"
+        stored = {
+            "game": {
+                "runnable": {"image": stored_image, "source_url": source}
+            }
+        }
+        built = {"tribal-village:built": "sha256:local"}
+        images = [
+            {
+                "status": "published",
+                "client_hash": "sha256:local",
+                "image_digest": "sha256:registry",
+                "public_image_uri": stored_image,
+            }
+        ]
+
+        verify_artifact_readback(expected, stored, built, images)
+
+        stored["game"]["runnable"]["source_url"] += "/different"
+        with self.assertRaisesRegex(ValueError, "stored source ref differs"):
+            verify_artifact_readback(expected, stored, built, images)
 
 
 if __name__ == "__main__":

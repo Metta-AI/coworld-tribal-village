@@ -11,7 +11,7 @@ on:
         required: false
         default: ""
       confirm_upload:
-        description: "Type upload to publish to Softmax. The default only builds the manifest."
+        description: "Type upload to publish. Dry-run builds and certifies without Observatory access."
         required: true
         default: "dry-run"
 
@@ -21,7 +21,7 @@ concurrency:
 
 env:
   COWORLD_NAME: tribal_village
-  COWORLD_CLI: "coworld[auth] @ git+https://github.com/Metta-AI/coworld.git@main"
+  COWORLD_CLI: "coworld[auth] @ git+https://github.com/Metta-AI/coworld.git@d4ba9f377e1441620765366dcdd981a4e77f3176"
 
 jobs:
   upload:
@@ -30,15 +30,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v9.0.0
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4.2.0
 
       - name: Install coworld CLI
         run: uvx --from "$COWORLD_CLI" coworld --help >/dev/null
@@ -72,11 +72,18 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building ${COWORLD_NAME}:${VERSION}"
 
-      - name: Build coworld manifest
+      - name: Build immutable coworld manifest and images
         run: |
           uvx --from "$COWORLD_CLI" coworld build \
             --version "${{ steps.version.outputs.version }}" \
             --output tmp/coworld_manifest.json
+          python3 scripts/pin_manifest_refs.py tmp/coworld_manifest.json
+          python3 scripts/attest_built_images.py \
+            tmp/coworld_manifest.json tmp/built-images.json
+
+      - name: Certify coworld locally
+        run: |
+          uvx --from "$COWORLD_CLI" coworld certify tmp/coworld_manifest.json
 
       - name: Upload coworld
         if: ${{ github.event.inputs.confirm_upload == 'upload' }}
@@ -100,8 +107,13 @@ jobs:
             --version "${{ steps.version.outputs.version }}")"
           uvx --from "$COWORLD_CLI" coworld status "$COWORLD_ID" --json \
             --server https://softmax.com/api > tmp/coworld-status.json
+          uvx --from "$COWORLD_CLI" coworld images --json --limit 500 \
+            --server https://softmax.com/api > tmp/coworld-images.json
           python3 scripts/verify_release_readback.py verify \
             --list-json tmp/coworld-list.json \
             --status-json tmp/coworld-status.json \
+            --manifest-json tmp/coworld_manifest.json \
+            --built-images-json tmp/built-images.json \
+            --images-json tmp/coworld-images.json \
             --name "$COWORLD_NAME" \
             --version "${{ steps.version.outputs.version }}"
