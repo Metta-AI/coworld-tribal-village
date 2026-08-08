@@ -71,6 +71,7 @@ def main() -> None:
     assert scheduler["strategy"] == "clone_fill"
     assert scheduler["seat_count"] == seats
     assert scheduler["variant_rotation"] == [contract["variant_id"]]
+    assert active["ladder"]["ranking"]["direction"] == "maximize"
     assert "qualification" not in active["ladder"]
     assert contract["admission"] == "direct_competition"
     print(f"validated {contract['league_id']} ({contract['variant_id']}, {seats} clone-filled seats)")

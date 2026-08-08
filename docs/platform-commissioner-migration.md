@@ -22,6 +22,7 @@ ladder:
     variant_rotation: [8-teams]
   ranking:
     algorithm: score
+    direction: maximize
     round_scoring_rule: mean
     standing_aggregation: ewma
     half_life_hours: 2
