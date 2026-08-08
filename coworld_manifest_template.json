@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/Metta-AI/coworld/main/src/coworld/coworld_manifest_schema.json",
+  "tags": ["strategy", "team-based", "survival"],
   "game": {
     "name": "tribal_village",
     "description": "A 2-8 team Tribal Village Coworld with six agents per village. One entrant policy controls all six teammates while they gather, craft, fight tumors, and defend their territory.",
-    "tags": ["strategy", "team-based", "survival"],
     "owner": "info@metta.ai",
     "runnable": {
       "type": "game",
