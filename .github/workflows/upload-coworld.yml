@@ -1,8 +1,7 @@
 name: Upload Coworld (manual)
 
-# Manual-only deploy scaffold. This intentionally has no push trigger:
-# after SOFTMAX_API_KEY is configured and this repo is ready for automatic
-# deploys, add a default-branch push trigger with narrow path filters.
+# Manual-only release workflow. Uploads wait for both hosted smoke and the
+# hosted certification transcript before accepting a version as released.
 
 on:
   workflow_dispatch:
@@ -85,21 +84,24 @@ jobs:
           uvx --from "$COWORLD_CLI" coworld upload-coworld tmp/coworld_manifest.json \
             --server https://softmax.com/api \
             --wait-hosted-smoke \
-            --hosted-smoke-timeout-seconds 1800
+            --hosted-smoke-timeout-seconds 1800 \
+            --wait-certification \
+            --certification-timeout-seconds 1800
 
-      - name: Verify canonical promotion
+      - name: Verify canonical and certified readback
         if: ${{ github.event.inputs.confirm_upload == 'upload' }}
         run: |
           set -euo pipefail
-          uvx --from "$COWORLD_CLI" coworld list --json --limit 500 --server https://softmax.com/api | python3 -c '
-          import json, sys
-          name = sys.argv[1]
-          version = sys.argv[2]
-          rows = json.load(sys.stdin)
-          match = next((r for r in rows if r.get("name") == name and r.get("version") == version), None)
-          if match is None:
-              raise SystemExit(f"::error::{name}:{version} not found after upload")
-          if not match.get("canonical"):
-              raise SystemExit(f"::error::{name}:{version} uploaded but is not canonical")
-          print("{}:{} is canonical ({})".format(name, version, match["id"]))
-          ' "$COWORLD_NAME" "${{ steps.version.outputs.version }}"
+          uvx --from "$COWORLD_CLI" coworld list --json --limit 500 \
+            --server https://softmax.com/api > tmp/coworld-list.json
+          COWORLD_ID="$(python3 scripts/verify_release_readback.py resolve \
+            --list-json tmp/coworld-list.json \
+            --name "$COWORLD_NAME" \
+            --version "${{ steps.version.outputs.version }}")"
+          uvx --from "$COWORLD_CLI" coworld status "$COWORLD_ID" --json \
+            --server https://softmax.com/api > tmp/coworld-status.json
+          python3 scripts/verify_release_readback.py verify \
+            --list-json tmp/coworld-list.json \
+            --status-json tmp/coworld-status.json \
+            --name "$COWORLD_NAME" \
+            --version "${{ steps.version.outputs.version }}"

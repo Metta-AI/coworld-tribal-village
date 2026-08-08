@@ -1,22 +1,18 @@
 # Tribal Village Environment
 
 <!-- COWORLD-VERIFY-BADGE:START -->
-![Coworld verify: not ready](https://img.shields.io/badge/coworld%20verify-not%20ready-lightgrey)
+![Coworld verify: certified](https://img.shields.io/badge/coworld%20verify-certified-brightgreen)
 <!-- COWORLD-VERIFY-BADGE:END -->
 
 
 <!-- COWORLD-REPO-STATUS:START -->
 > [!NOTE]
-> Coworld repo status: **template** (`coworld-template`).
+> Coworld repo status: **canonical and certified** (`coworld`; the obsolete `coworld-template` topic should not be present).
 > Canonical repository: `Metta-AI/coworld-tribal-village`.
-> Manifest path: `coworld_manifest_template.json`.
+> Canonical release: `tribal_village:0.1.28` (`cow_f9094e3c-2860-4e77-9a13-eac56f754683`).
+> Manifest template: `coworld_manifest_template.json` (resolved by `coworld build`).
 > Build path: `Dockerfile`, `players/villager/Dockerfile`
-> Certification: blocked until this template resolves to a concrete `coworld_manifest.json` and `uv run coworld certify coworld_manifest.json` passes.
->
-> Missing pieces:
-> - [ ] Resolve `coworld_manifest_template.json` into a concrete root `coworld_manifest.json`.
-> - [ ] Confirm buildable game and starter-player images.
-> - [ ] Run `uv run coworld certify coworld_manifest.json` and record the passing command.
+> Certification: hosted certification passed on 2026-08-08, including smoke episode, result, replay, bundled-player, and supporting-role checks.
 <!-- COWORLD-REPO-STATUS:END -->
 
 
@@ -65,6 +61,8 @@ uv run coworld build --version 0.1.28
 uv run coworld certify dist/coworld_manifest.json
 uv run coworld play dist/coworld_manifest.json
 ```
+
+The canonical `0.1.28` artifact is already published; do not reuse that version for a changed manifest or image. Future releases are manual through **Upload Coworld (manual)**. Its upload path waits for both hosted smoke and hosted certification, then reads the exact name/version back and requires it to be canonical with a fully passing certification transcript. Leave `confirm_upload` as `dry-run` to validate manifest construction without publishing anything.
 
 The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
 `COWORLD_PLAYER_WS_URL`, receive JSON action observations, and send one discrete action in `0..63`. Live and replay
