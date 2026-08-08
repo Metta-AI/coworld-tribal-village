@@ -3,6 +3,7 @@
   "game": {
     "name": "tribal_village",
     "description": "A 2-8 team Tribal Village Coworld with six agents per village. One entrant policy controls all six teammates while they gather, craft, fight tumors, and defend their territory.",
+    "tags": ["strategy", "team-based", "survival"],
     "owner": "info@metta.ai",
     "runnable": {
       "type": "game",
