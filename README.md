@@ -62,7 +62,13 @@ uv run coworld certify dist/coworld_manifest.json
 uv run coworld play dist/coworld_manifest.json
 ```
 
-The canonical `0.1.28` artifact is already published; do not reuse that version for a changed manifest or image. Future releases are manual through **Upload Coworld (manual)**. Its upload path waits for both hosted smoke and hosted certification, then reads the exact name/version back and requires it to be canonical with a fully passing certification transcript. Leave `confirm_upload` as `dry-run` to validate manifest construction without publishing anything.
+The canonical `0.1.28` artifact is already published; do not reuse that version
+for a changed manifest or image. Future releases are manual through **Upload
+Coworld (manual)**. Every run builds immutable source references, attests the
+three local image hashes, and runs local Coworld certification. A confirmed
+upload then waits for hosted smoke and hosted certification before requiring
+exact source and image-content readback. Leave `confirm_upload` as `dry-run` to
+run the build and certification gates without publishing anything.
 
 The game image serves `/client/global`, `/client/player?slot=0&token=...`, and `/client/replay`. Player containers read
 `COWORLD_PLAYER_WS_URL`, receive JSON action observations, and send one discrete action in `0..63`. Live and replay

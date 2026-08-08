@@ -36,6 +36,68 @@ def resolve_exact_canonical(rows: Any, *, name: str, version: str) -> dict[str, 
     return match
 
 
+def _runnable_fields(
+    value: object, path: tuple[str, ...] = ()
+) -> dict[tuple[str, ...], dict[str, object]]:
+    found: dict[tuple[str, ...], dict[str, object]] = {}
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            found.update(_runnable_fields(item, path + (str(index),)))
+    elif isinstance(value, dict):
+        if isinstance(value.get("image"), str):
+            found[path] = value
+        for key, item in value.items():
+            found.update(_runnable_fields(item, path + (key,)))
+    return found
+
+
+def verify_artifact_readback(
+    expected_manifest: object,
+    stored_manifest: object,
+    built_images: object,
+    image_listing: object,
+) -> None:
+    if not isinstance(expected_manifest, dict) or not isinstance(stored_manifest, dict):
+        raise ValueError("built and stored manifests must be JSON objects")
+    if not isinstance(built_images, dict):
+        raise ValueError("built image attestation must be a JSON object")
+    if not isinstance(image_listing, list):
+        raise ValueError("Coworld image listing must be a JSON array")
+
+    expected = _runnable_fields(expected_manifest)
+    stored = _runnable_fields(stored_manifest)
+    if not expected or set(expected) != set(stored):
+        raise ValueError("stored manifest runnable topology differs from built manifest")
+
+    for path, expected_runnable in expected.items():
+        stored_runnable = stored[path]
+        label = "/".join(path)
+        if stored_runnable.get("source_url") != expected_runnable.get("source_url"):
+            raise ValueError(f"stored source ref differs at {label}")
+        local_image = str(expected_runnable["image"])
+        expected_hash = built_images.get(local_image)
+        if not isinstance(expected_hash, str) or not expected_hash:
+            raise ValueError(f"no local image attestation for {local_image}")
+        stored_image = stored_runnable.get("image")
+        if not isinstance(stored_image, str) or "@sha256:" not in stored_image:
+            raise ValueError(f"stored runnable has no immutable image at {label}")
+        matches = [
+            item
+            for item in image_listing
+            if isinstance(item, dict) and item.get("public_image_uri") == stored_image
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"expected exactly one uploaded image for {stored_image}, "
+                f"found {len(matches)}"
+            )
+        details = matches[0]
+        if details.get("client_hash") != expected_hash:
+            raise ValueError(f"uploaded image content differs at {label}")
+        if details.get("status") != "published" or not details.get("image_digest"):
+            raise ValueError(f"uploaded image is not published at {label}")
+
+
 def verify_release_readback(rows: Any, status: Any, *, name: str, version: str) -> str:
     match = resolve_exact_canonical(rows, name=name, version=version)
     if not isinstance(status, dict):
@@ -118,6 +180,9 @@ def _parser() -> argparse.ArgumentParser:
         subparser.add_argument("--version", required=True)
         if command == "verify":
             subparser.add_argument("--status-json", type=Path, required=True)
+            subparser.add_argument("--manifest-json", type=Path, required=True)
+            subparser.add_argument("--built-images-json", type=Path, required=True)
+            subparser.add_argument("--images-json", type=Path, required=True)
     return parser
 
 
@@ -130,6 +195,16 @@ def main() -> None:
             print(match["id"])
             return
         status = _load_json(args.status_json)
+        coworld = status.get("coworld") if isinstance(status, dict) else None
+        stored_manifest = coworld.get("manifest") if isinstance(coworld, dict) else None
+        if not isinstance(stored_manifest, dict):
+            raise ValueError("status readback has no stored manifest")
+        verify_artifact_readback(
+            _load_json(args.manifest_json),
+            stored_manifest,
+            _load_json(args.built_images_json),
+            _load_json(args.images_json),
+        )
         print(
             verify_release_readback(rows, status, name=args.name, version=args.version)
         )
