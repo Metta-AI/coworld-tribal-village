@@ -21,7 +21,7 @@ concurrency:
 
 env:
   COWORLD_NAME: tribal_village
-  COWORLD_CLI: "coworld[auth] @ git+https://github.com/Metta-AI/coworld.git@main"
+  COWORLD_CLI: "coworld[auth] @ git+https://github.com/Metta-AI/coworld.git@d4ba9f377e1441620765366dcdd981a4e77f3176"
 
 jobs:
   upload:
