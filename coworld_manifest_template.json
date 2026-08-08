@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/Metta-AI/coworld/main/src/coworld/coworld_manifest_schema.json",
   "game": {
     "name": "tribal_village",
-    "description": "A 48-agent Tribal Village Coworld where each player controls one village agent gathering, crafting, fighting tumors, and supporting its team.",
+    "description": "A 2-8 team Tribal Village Coworld with six agents per village. One entrant policy controls all six teammates while they gather, craft, fight tumors, and defend their territory.",
     "owner": "info@metta.ai",
     "runnable": {
       "type": "game",
@@ -21,14 +21,16 @@
       "required": [
         "tokens",
         "players",
+        "team_count",
+        "num_agents",
         "max_steps",
         "tick_rate"
       ],
       "properties": {
         "tokens": {
-          "description": "One connection token per Tribal Village agent slot.",
+          "description": "One connection token per active Tribal Village agent slot; exactly six slots per configured team.",
           "type": "array",
-          "minItems": 48,
+          "minItems": 12,
           "maxItems": 48,
           "items": {
             "type": "string",
@@ -36,9 +38,9 @@
           }
         },
         "players": {
-          "description": "One player display-name object per agent slot.",
+          "description": "One player display-name object per active agent slot; exactly six slots per configured team.",
           "type": "array",
-          "minItems": 48,
+          "minItems": 12,
           "maxItems": 48,
           "items": {
             "type": "object",
@@ -77,6 +79,19 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 2147483647
+        },
+        "team_count": {
+          "description": "Active village teams. Each team receives one village, six player slots, and one hostile spawner.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8
+        },
+        "num_agents": {
+          "description": "Active player slots; must equal team_count multiplied by six. Used by the tournament commissioner for team seating.",
+          "type": "integer",
+          "minimum": 12,
+          "maximum": 48,
+          "multipleOf": 6
         }
       }
     },
@@ -92,18 +107,18 @@
       ],
       "properties": {
         "scores": {
-          "description": "One cumulative reward score per agent slot.",
+          "description": "One cumulative reward score per active agent slot.",
           "type": "array",
-          "minItems": 48,
+          "minItems": 12,
           "maxItems": 48,
           "items": {
             "type": "number"
           }
         },
         "team_scores": {
-          "description": "Eight team scores, each summing the six agent scores for that village.",
+          "description": "One team score per active village, each summing its six agent scores.",
           "type": "array",
-          "minItems": 8,
+          "minItems": 2,
           "maxItems": 8,
           "items": {
             "type": "number"
@@ -171,9 +186,9 @@
   "commissioner": [
     {
       "id": "default-commissioner",
-      "name": "Default Commissioner",
+      "name": "Tribal Village Team Commissioner",
       "type": "commissioner",
-      "description": "Game-agnostic round-robin commissioner with mean-score rankings.",
+      "description": "Seats one distinct entrant policy in each village and gives it all six teammates.",
       "source_url": "https://github.com/Metta-AI/coworld-tribal-village/tree/main/commissioner/commissioners/ruleset_strategy_commissioner",
       "image": "{{COMMISSIONER_IMAGE}}"
     }
@@ -184,12 +199,584 @@
   "variants": [
     {
       "id": "default",
-      "name": "Default",
-      "description": "2000-step 48-agent Tribal Village Coworld episode.",
+      "name": "3-team villages",
+      "description": "3 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
       "game_config": {
         "max_steps": 2000,
         "tick_rate": 20,
         "player_connect_timeout_seconds": 180,
+        "team_count": 3,
+        "num_agents": 18,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          }
+        ]
+      }
+    },
+    {
+      "id": "2-teams",
+      "name": "2-team villages",
+      "description": "2 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 2,
+        "num_agents": 12,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          }
+        ]
+      }
+    },
+    {
+      "id": "4-teams",
+      "name": "4-team villages",
+      "description": "4 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 4,
+        "num_agents": 24,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          },
+          {
+            "name": "Agent 18"
+          },
+          {
+            "name": "Agent 19"
+          },
+          {
+            "name": "Agent 20"
+          },
+          {
+            "name": "Agent 21"
+          },
+          {
+            "name": "Agent 22"
+          },
+          {
+            "name": "Agent 23"
+          }
+        ]
+      }
+    },
+    {
+      "id": "5-teams",
+      "name": "5-team villages",
+      "description": "5 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 5,
+        "num_agents": 30,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          },
+          {
+            "name": "Agent 18"
+          },
+          {
+            "name": "Agent 19"
+          },
+          {
+            "name": "Agent 20"
+          },
+          {
+            "name": "Agent 21"
+          },
+          {
+            "name": "Agent 22"
+          },
+          {
+            "name": "Agent 23"
+          },
+          {
+            "name": "Agent 24"
+          },
+          {
+            "name": "Agent 25"
+          },
+          {
+            "name": "Agent 26"
+          },
+          {
+            "name": "Agent 27"
+          },
+          {
+            "name": "Agent 28"
+          },
+          {
+            "name": "Agent 29"
+          }
+        ]
+      }
+    },
+    {
+      "id": "6-teams",
+      "name": "6-team villages",
+      "description": "6 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 6,
+        "num_agents": 36,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          },
+          {
+            "name": "Agent 18"
+          },
+          {
+            "name": "Agent 19"
+          },
+          {
+            "name": "Agent 20"
+          },
+          {
+            "name": "Agent 21"
+          },
+          {
+            "name": "Agent 22"
+          },
+          {
+            "name": "Agent 23"
+          },
+          {
+            "name": "Agent 24"
+          },
+          {
+            "name": "Agent 25"
+          },
+          {
+            "name": "Agent 26"
+          },
+          {
+            "name": "Agent 27"
+          },
+          {
+            "name": "Agent 28"
+          },
+          {
+            "name": "Agent 29"
+          },
+          {
+            "name": "Agent 30"
+          },
+          {
+            "name": "Agent 31"
+          },
+          {
+            "name": "Agent 32"
+          },
+          {
+            "name": "Agent 33"
+          },
+          {
+            "name": "Agent 34"
+          },
+          {
+            "name": "Agent 35"
+          }
+        ]
+      }
+    },
+    {
+      "id": "7-teams",
+      "name": "7-team villages",
+      "description": "7 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 7,
+        "num_agents": 42,
+        "players": [
+          {
+            "name": "Agent 0"
+          },
+          {
+            "name": "Agent 1"
+          },
+          {
+            "name": "Agent 2"
+          },
+          {
+            "name": "Agent 3"
+          },
+          {
+            "name": "Agent 4"
+          },
+          {
+            "name": "Agent 5"
+          },
+          {
+            "name": "Agent 6"
+          },
+          {
+            "name": "Agent 7"
+          },
+          {
+            "name": "Agent 8"
+          },
+          {
+            "name": "Agent 9"
+          },
+          {
+            "name": "Agent 10"
+          },
+          {
+            "name": "Agent 11"
+          },
+          {
+            "name": "Agent 12"
+          },
+          {
+            "name": "Agent 13"
+          },
+          {
+            "name": "Agent 14"
+          },
+          {
+            "name": "Agent 15"
+          },
+          {
+            "name": "Agent 16"
+          },
+          {
+            "name": "Agent 17"
+          },
+          {
+            "name": "Agent 18"
+          },
+          {
+            "name": "Agent 19"
+          },
+          {
+            "name": "Agent 20"
+          },
+          {
+            "name": "Agent 21"
+          },
+          {
+            "name": "Agent 22"
+          },
+          {
+            "name": "Agent 23"
+          },
+          {
+            "name": "Agent 24"
+          },
+          {
+            "name": "Agent 25"
+          },
+          {
+            "name": "Agent 26"
+          },
+          {
+            "name": "Agent 27"
+          },
+          {
+            "name": "Agent 28"
+          },
+          {
+            "name": "Agent 29"
+          },
+          {
+            "name": "Agent 30"
+          },
+          {
+            "name": "Agent 31"
+          },
+          {
+            "name": "Agent 32"
+          },
+          {
+            "name": "Agent 33"
+          },
+          {
+            "name": "Agent 34"
+          },
+          {
+            "name": "Agent 35"
+          },
+          {
+            "name": "Agent 36"
+          },
+          {
+            "name": "Agent 37"
+          },
+          {
+            "name": "Agent 38"
+          },
+          {
+            "name": "Agent 39"
+          },
+          {
+            "name": "Agent 40"
+          },
+          {
+            "name": "Agent 41"
+          }
+        ]
+      }
+    },
+    {
+      "id": "8-teams",
+      "name": "8-team villages",
+      "description": "8 competing villages with six agents and one hostile spawner per team. Each entrant policy controls one complete village.",
+      "game_config": {
+        "max_steps": 2000,
+        "tick_rate": 20,
+        "player_connect_timeout_seconds": 180,
+        "team_count": 8,
+        "num_agents": 48,
         "players": [
           {
             "name": "Agent 0"
@@ -344,6 +931,8 @@
       "max_steps": 64,
       "tick_rate": 20,
       "player_connect_timeout_seconds": 180,
+      "team_count": 3,
+      "num_agents": 18,
       "players": [
         {
           "name": "Agent 0"
@@ -398,190 +987,10 @@
         },
         {
           "name": "Agent 17"
-        },
-        {
-          "name": "Agent 18"
-        },
-        {
-          "name": "Agent 19"
-        },
-        {
-          "name": "Agent 20"
-        },
-        {
-          "name": "Agent 21"
-        },
-        {
-          "name": "Agent 22"
-        },
-        {
-          "name": "Agent 23"
-        },
-        {
-          "name": "Agent 24"
-        },
-        {
-          "name": "Agent 25"
-        },
-        {
-          "name": "Agent 26"
-        },
-        {
-          "name": "Agent 27"
-        },
-        {
-          "name": "Agent 28"
-        },
-        {
-          "name": "Agent 29"
-        },
-        {
-          "name": "Agent 30"
-        },
-        {
-          "name": "Agent 31"
-        },
-        {
-          "name": "Agent 32"
-        },
-        {
-          "name": "Agent 33"
-        },
-        {
-          "name": "Agent 34"
-        },
-        {
-          "name": "Agent 35"
-        },
-        {
-          "name": "Agent 36"
-        },
-        {
-          "name": "Agent 37"
-        },
-        {
-          "name": "Agent 38"
-        },
-        {
-          "name": "Agent 39"
-        },
-        {
-          "name": "Agent 40"
-        },
-        {
-          "name": "Agent 41"
-        },
-        {
-          "name": "Agent 42"
-        },
-        {
-          "name": "Agent 43"
-        },
-        {
-          "name": "Agent 44"
-        },
-        {
-          "name": "Agent 45"
-        },
-        {
-          "name": "Agent 46"
-        },
-        {
-          "name": "Agent 47"
         }
       ]
     },
     "players": [
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
-      {
-        "player_id": "villager"
-      },
       {
         "player_id": "villager"
       },

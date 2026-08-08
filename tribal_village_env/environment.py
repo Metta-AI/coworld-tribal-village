@@ -37,6 +37,7 @@ class NimConfig(ctypes.Structure):
     _fields_ = [
         ("max_steps", ctypes.c_int32),
         ("seed", ctypes.c_int32),
+        ("team_count", ctypes.c_int32),
         ("tumor_spawn_rate", ctypes.c_float),
         ("heart_reward", ctypes.c_float),
         ("ore_reward", ctypes.c_float),
@@ -219,7 +220,12 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         func_specs = [
             # required
             ("tribal_village_create", [], ctypes.c_void_p, False),
-            ("tribal_village_set_config", [ctypes.c_void_p, config_ptr], ctypes.c_int32, False),
+            (
+                "tribal_village_set_config",
+                [ctypes.c_void_p, config_ptr],
+                ctypes.c_int32,
+                False,
+            ),
             (
                 "tribal_village_reset_and_get_obs",
                 [
@@ -324,6 +330,7 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         return NimConfig(
             max_steps=int(self.max_steps),
             seed=int(self.config.get("seed", 0)),
+            team_count=int(self.config.get("team_count", 8)),
             tumor_spawn_rate=self._nim_float("tumor_spawn_rate"),
             heart_reward=self._nim_float("heart_reward"),
             ore_reward=self._nim_float("ore_reward"),
@@ -454,7 +461,9 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         """Return an exact pre-step engine-valid mask with shape (agents, actions)."""
         func = getattr(self.lib, "tribal_village_valid_action_mask", None)
         if func is None:
-            raise AttributeError("Nim library does not export tribal_village_valid_action_mask")
+            raise AttributeError(
+                "Nim library does not export tribal_village_valid_action_mask"
+            )
         success = func(
             self.env_ptr,
             self.valid_action_mask_buffer.ctypes.data_as(ctypes.c_void_p),
@@ -471,7 +480,9 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         """Reset the native scripted controller used for teacher labels."""
         func = getattr(self.lib, "tribal_village_reset_builtin_ai", None)
         if func is None:
-            raise AttributeError("Nim library does not export tribal_village_reset_builtin_ai")
+            raise AttributeError(
+                "Nim library does not export tribal_village_reset_builtin_ai"
+            )
         success = func(self.env_ptr, ctypes.c_int32(seed))
         if not success:
             raise RuntimeError("Failed to reset builtin AI")
@@ -480,7 +491,9 @@ class TribalVillageEnv(pufferlib.PufferEnv):
         """Return one native scripted-controller action per agent."""
         func = getattr(self.lib, "tribal_village_builtin_ai_actions", None)
         if func is None:
-            raise AttributeError("Nim library does not export tribal_village_builtin_ai_actions")
+            raise AttributeError(
+                "Nim library does not export tribal_village_builtin_ai_actions"
+            )
         success = func(
             self.env_ptr,
             self.builtin_ai_action_buffer.ctypes.data_as(ctypes.c_void_p),

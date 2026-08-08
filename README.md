@@ -22,7 +22,7 @@
 
 
 
-Multi‑agent RL playground in Nim with a Python wrapper (PufferLib compatible). 48 agents (8 teams, 6 per team) compete for
+Multi-agent RL playground in Nim with a Python wrapper (PufferLib compatible). Two to eight teams of six agents compete for
 resources while hostile tumors spread a freezing “clippy” tint across the map. Code: <https://github.com/Metta-AI/coworld-tribal-village>
 
 <img width="2932" height="1578" alt="image" src="https://github.com/user-attachments/assets/b1736191-ff85-48fa-b5cf-f47e441fd118" />
@@ -57,7 +57,7 @@ tribal-village play
 
 ## Coworld
 
-Tribal Village now ships a Coworld package surface with 48 player slots, one slot per agent. Build and run it with the
+Tribal Village now ships a Coworld package surface with 12-48 player slots, one slot per agent and six slots per team. Tournament rounds assign one entrant policy to all six agents in a village. Build and run it with the
 current `coworld` CLI from the Metta repository:
 
 ```bash
@@ -116,7 +116,7 @@ These gameplay settings map to `EnvironmentConfig` in `src/environment.nim`.
 ## Game Overview
 
 - Map: 192x108 grid, procedural rivers/fields/trees.
-- Agents: 48 agents (8 teams, 6 per team).
+- Agents: 12-48 agents (2-8 teams, 6 per team); the training default remains 48.
 - Resources: ore, batteries, water, wheat, wood, spears, lanterns, armor, bread.
 - Threats: tumors spread dark clippy tint; frozen tiles/objects cannot be harvested or used until thawed.
 - Coalition touches we enjoyed while building it:
@@ -161,7 +161,7 @@ Discrete 64 (`verb * 8 + argument`), where the argument is a direction (0..7):
 ### Architecture
 
 - **Nim backend**: High-performance simulation and rendering
-- **Python wrapper**: PufferLib-compatible interface for all 48 agents
+- **Python wrapper**: PufferLib-compatible interface with fixed 48-agent buffers and a configurable active team count
 - **Zero-copy communication**: Direct pointer passing for efficiency
 - **Web ready**: Emscripten support for WASM deployment
 

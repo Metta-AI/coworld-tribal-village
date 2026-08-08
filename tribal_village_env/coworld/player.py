@@ -24,7 +24,10 @@ class BuiltinAIPlayer:
         self.seed = int(game_config["seed"])
         self.env = CoworldTribalVillageEnv(
             max_steps=int(first_message["max_steps"]),
-            config={"seed": self.seed},
+            config={
+                "seed": self.seed,
+                "team_count": int(game_config["team_count"]),
+            },
         )
         self.env.reset()
         self.env.reset_builtin_ai(self.seed)

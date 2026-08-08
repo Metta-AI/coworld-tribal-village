@@ -12,6 +12,7 @@ type
   CEnvironmentConfig* = object
     maxSteps*: int32
     seed*: int32
+    teamCount*: int32
     tumorSpawnRate*: float32
     heartReward*: float32
     oreReward*: float32
@@ -36,6 +37,8 @@ proc applyConfig(cfg: CEnvironmentConfig): EnvironmentConfig =
     result.maxSteps = cfg.maxSteps.int
   if cfg.seed > 0:
     result.seed = cfg.seed.int
+  if cfg.teamCount >= MinTeamCount and cfg.teamCount <= MaxTeamCount:
+    result.teamCount = cfg.teamCount.int
 
   template applyFloat(field: untyped, value: float32) =
     if not isNan32(value):
@@ -274,7 +277,7 @@ proc tribal_village_builtin_ai_actions(
   env: pointer,
   actions_buffer: ptr UncheckedArray[uint8]
 ): int32 {.exportc, dynlib.} =
-  ## Compute one full 48-agent action vector from the existing Nim AI.
+  ## Compute active-agent actions inside the fixed 48-agent buffer.
   let envObj = environmentFromPointer(env)
   if envObj == nil or actions_buffer.isNil:
     return 0
@@ -283,6 +286,8 @@ proc tribal_village_builtin_ai_actions(
       coworldBuiltinAiByEnv[env] = newController(1)
     let coworldBuiltinAi = coworldBuiltinAiByEnv[env]
     for i in 0..<MapAgents:
+      actions_buffer[i] = 0'u8
+    for i in 0..<envObj.agents.len:
       actions_buffer[i] = coworldBuiltinAi.decideAction(envObj, i)
     coworldBuiltinAi.updateController()
     return 1
@@ -305,7 +310,7 @@ proc tribal_village_valid_action_mask(
   try:
     for i in 0 ..< required:
       mask_buffer[i] = 0'u8
-    for agentId in 0 ..< MapAgents:
+    for agentId in 0 ..< envObj.agents.len:
       let base = agentId * actionCount
       for action in 0 ..< actionCount:
         if envObj.isActionValid(agentId, action.uint8):

@@ -33,12 +33,16 @@ proc newMirror(firstMessage: JsonNode): Mirror =
     seed =
       if gameConfig != nil: gameConfig{"seed"}.getInt(1)
       else: 1
+    teamCount =
+      if gameConfig != nil: gameConfig{"team_count"}.getInt(MaxTeamCount)
+      else: MaxTeamCount
     maxSteps = firstMessage{"max_steps"}.getInt(0)
   var config = defaultEnvironmentConfig()
   if maxSteps > 0:
     config.maxSteps = maxSteps
   if seed > 0:
     config.seed = seed
+  config.teamCount = teamCount
   result = Mirror(
     env: newEnvironment(config),
     controller: newController(if seed > 0: seed else: 1),
@@ -47,8 +51,8 @@ proc newMirror(firstMessage: JsonNode): Mirror =
   result.env.reset()
 
 proc builtinActions(mirror: Mirror): array[MapAgents, uint8] =
-  ## Computes the full 48-agent action vector from the built-in AI.
-  for agentId in 0 ..< MapAgents:
+  ## Computes actions for the active teams inside the fixed 48-agent ABI.
+  for agentId in 0 ..< mirror.env.agents.len:
     result[agentId] = mirror.controller.decideAction(mirror.env, agentId)
   mirror.controller.updateController()
 
@@ -97,7 +101,7 @@ proc playEpisode(
       node{"slot"}.getInt(0),
       node{"tick"}.getInt(0)
     )
-    ws.send($ %*{"type": "action", "action": action})
+    ws.send( $ %*{"type": "action", "action": action})
 
 proc runPlayer() =
   ## Connects with retry windows like the Crewrift notsus player: tournament

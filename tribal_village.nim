@@ -214,12 +214,12 @@ proc display() =
   let insideRect = mousePos.x >= logicalRect.x and mousePos.x <= logicalRect.x + logicalRect.w and
     mousePos.y >= logicalRect.y and mousePos.y <= logicalRect.y + logicalRect.h
 
-  worldMapPanel.hasMouse = worldMapPanel.visible and ((not mouseCaptured and insideRect) or
-    (mouseCaptured and mouseCapturedPanel == worldMapPanel))
+  worldMapPanel.hasMouse = worldMapPanel.visible and ((not common.mouseCaptured and insideRect) or
+    (common.mouseCaptured and common.mouseCapturedPanel == worldMapPanel))
 
   if worldMapPanel.hasMouse and window.buttonPressed[MouseLeft]:
-    mouseCaptured = true
-    mouseCapturedPanel = worldMapPanel
+    common.mouseCaptured = true
+    common.mouseCapturedPanel = worldMapPanel
     mouseDownPos = logicalMousePos(window)
 
   if worldMapPanel.hasMouse:

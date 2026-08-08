@@ -61,7 +61,7 @@ seed chosen by the live runtime:
     "tick_rate": 20,
     "players": ["Agent 0"]
   },
-  "ticks": [{"a": "base64-encoded 48 action bytes"}],
+  "ticks": [{"a": "base64-encoded action bytes, one per active agent"}],
   "results": {}
 }
 ```

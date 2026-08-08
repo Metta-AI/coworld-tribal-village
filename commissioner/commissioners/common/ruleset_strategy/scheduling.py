@@ -22,6 +22,7 @@ def schedule_entries(
     primary_entries: list[PolicyPoolEntry],
     filler_entries: list[PolicyPoolEntry],
     num_agents: int,
+    team_count: int | None,
     variant_id: str,
     game_config: dict[str, Any] | None,
     config: RulesetStrategyCommissionerConfig,
@@ -47,7 +48,7 @@ def schedule_entries(
         )
 
     if config.seating == "team_blocks":
-        team_count = config.defaults.team_count
+        team_count = team_count or config.defaults.team_count
         if len(primary_entries) < team_count:
             raise ValueError(f"team_blocks seating requires at least {team_count} primary entries")
         if num_agents % team_count != 0:

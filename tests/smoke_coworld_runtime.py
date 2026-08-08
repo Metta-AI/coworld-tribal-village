@@ -24,11 +24,12 @@ from tribal_village_env.coworld.server import CoworldConfig
 from tribal_village_env.coworld.direct_env import CoworldTribalVillageEnv
 from tribal_village_env.coworld.player import BuiltinAIPlayer
 
-
 ROOT = Path(__file__).resolve().parents[1]
-PLAYER_COUNT = 48
+TEAM_COUNT = 3
+PLAYER_COUNT = TEAM_COUNT * 6
+MAX_PLAYER_COUNT = 48
 SPRITE_FRAME_KIND = "tribal-village-sprite-cells-v2"
-DELAYED_FIRST_ACTION_SLOT = 47
+DELAYED_FIRST_ACTION_SLOT = PLAYER_COUNT - 1
 DELAYED_FIRST_ACTION = 11
 CELL_OFFSET_FLAGS = 22
 CELL_OFFSET_THING = 4
@@ -41,6 +42,7 @@ CELL_OFFSET_ACTION_B = 25
 ACTION_TINT_FLAG = 4
 THING_AGENT = 0
 THING_ASSEMBLER = 4
+THING_SPAWNER = 5
 THING_PLANTED_LANTERN = 11
 AGENTS_PER_TEAM = 6
 MAP_BORDER = 4
@@ -92,6 +94,8 @@ def coworld_config_payload() -> dict[str, Any]:
         "max_steps": 4,
         "tick_rate": 20,
         "player_connect_timeout_seconds": 1,
+        "team_count": TEAM_COUNT,
+        "num_agents": PLAYER_COUNT,
     }
 
 
@@ -232,6 +236,7 @@ def assert_builtin_ai_player_can_choose_action() -> None:
             "game_config": {
                 "seed": 1,
                 "max_steps": 4,
+                "team_count": 8,
             },
         }
     )
@@ -272,7 +277,7 @@ def assert_team_villages_start_on_outer_ring() -> None:
                         (cell % frame["width"], cell // frame["width"])
                     )
 
-            assert len(altar_positions) == PLAYER_COUNT // AGENTS_PER_TEAM
+            assert len(altar_positions) == MAX_PLAYER_COUNT // AGENTS_PER_TEAM
             edge_distances = [
                 min(
                     x - MAP_BORDER,
@@ -324,15 +329,15 @@ def assert_builtin_ai_builds_lantern_territory() -> None:
     try:
         env.reset()
         env.reset_builtin_ai(1)
-        cumulative_rewards = [0.0] * PLAYER_COUNT
+        cumulative_rewards = [0.0] * MAX_PLAYER_COUNT
         for _ in range(600):
             env.step(env.builtin_ai_actions())
             for slot, reward in enumerate(env.rewards.tolist()):
                 cumulative_rewards[slot] += float(reward)
 
         frame, cells = env.sprite_frame()
-        planted_by_team = [0] * (PLAYER_COUNT // AGENTS_PER_TEAM)
-        carried_by_team = [0] * (PLAYER_COUNT // AGENTS_PER_TEAM)
+        planted_by_team = [0] * (MAX_PLAYER_COUNT // AGENTS_PER_TEAM)
+        carried_by_team = [0] * (MAX_PLAYER_COUNT // AGENTS_PER_TEAM)
         for cell in range(frame["width"] * frame["height"]):
             idx = cell * frame["stride"]
             thing = cells[idx + CELL_OFFSET_THING]
@@ -346,7 +351,7 @@ def assert_builtin_ai_builds_lantern_territory() -> None:
 
         team_scores = [
             sum(cumulative_rewards[start : start + AGENTS_PER_TEAM])
-            for start in range(0, PLAYER_COUNT, AGENTS_PER_TEAM)
+            for start in range(0, MAX_PLAYER_COUNT, AGENTS_PER_TEAM)
         ]
         assert sum(planted_by_team) >= 75
         assert planted_by_team[6] >= 1
@@ -354,6 +359,34 @@ def assert_builtin_ai_builds_lantern_territory() -> None:
         assert sum(team_scores) > 0.0
     finally:
         env.close()
+
+
+def assert_team_count_scales_villages_and_spawners() -> None:
+    for team_count in range(2, 9):
+        env = CoworldTribalVillageEnv(
+            max_steps=4,
+            config={"seed": 7, "team_count": team_count},
+        )
+        try:
+            env.reset()
+            frame, cells = env.sprite_frame()
+            agents_by_team = [0] * team_count
+            altar_count = 0
+            spawner_count = 0
+            for cell in range(frame["width"] * frame["height"]):
+                idx = cell * frame["stride"]
+                thing = cells[idx + CELL_OFFSET_THING]
+                if thing == THING_AGENT:
+                    agents_by_team[cells[idx + CELL_OFFSET_TEAM_ID]] += 1
+                elif thing == THING_ASSEMBLER:
+                    altar_count += 1
+                elif thing == THING_SPAWNER:
+                    spawner_count += 1
+            assert agents_by_team == [AGENTS_PER_TEAM] * team_count
+            assert altar_count == team_count
+            assert spawner_count == team_count
+        finally:
+            env.close()
 
 
 def assert_client_websockets_are_proxy_relative() -> None:
@@ -403,6 +436,19 @@ def assert_client_websockets_are_proxy_relative() -> None:
     assert manifest["certification"]["game_config"]["max_steps"] == 64
     assert manifest["variants"][0]["game_config"]["tick_rate"] == 20
     assert manifest["certification"]["game_config"]["tick_rate"] == 20
+    assert manifest["variants"][0]["game_config"]["team_count"] == TEAM_COUNT
+    assert manifest["variants"][0]["game_config"]["num_agents"] == PLAYER_COUNT
+    assert [
+        variant["game_config"]["team_count"] for variant in manifest["variants"]
+    ] == [
+        3,
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+    ]
     assert "seed" not in manifest["variants"][0]["game_config"]
     assert "seed" not in manifest["certification"]["game_config"]
     assert (
@@ -503,6 +549,7 @@ def main() -> None:
             assert_team_villages_start_on_outer_ring()
             assert_action_tints_are_exported_as_sprite_state()
             assert_builtin_ai_builds_lantern_territory()
+            assert_team_count_scales_villages_and_spawners()
             process.wait(timeout=30)
             if process.returncode != 0:
                 stderr = process.stderr.read() if process.stderr else ""
@@ -510,10 +557,11 @@ def main() -> None:
             results = json.loads(results_path.read_text())
             replay = json.loads(replay_path.read_text())
             assert len(results["scores"]) == PLAYER_COUNT
-            assert len(results["team_scores"]) == 8
+            assert len(results["team_scores"]) == TEAM_COUNT
             assert results["truncation_reason"] == "max_steps"
             assert replay["schema"] == "tribal-village-replay-v2"
             assert replay["initial"]["seed"] == episode_seed
+            assert replay["initial"]["team_count"] == TEAM_COUNT
             assert replay["initial"]["players"][0] == "Agent 0"
             assert len(replay["ticks"]) == results["ticks"]
             assert "actions" not in replay

@@ -46,6 +46,7 @@ class NimConfig(ctypes.Structure):
     _fields_ = [
         ("max_steps", ctypes.c_int32),
         ("seed", ctypes.c_int32),
+        ("team_count", ctypes.c_int32),
         ("tumor_spawn_rate", ctypes.c_float),
         ("heart_reward", ctypes.c_float),
         ("ore_reward", ctypes.c_float),
@@ -84,6 +85,10 @@ class CoworldTribalVillageEnv:
         self._setup_ctypes_interface()
 
         self.num_agents = int(self.lib.tribal_village_get_num_agents())
+        self.team_count = int(self.config.get("team_count", len(TEAM_COLORS)))
+        if self.team_count < 2 or self.team_count > len(TEAM_COLORS):
+            raise ValueError("team_count must be between 2 and 8")
+        self.active_agent_count = self.team_count * 6
         self.map_width = int(self.lib.tribal_village_get_map_width())
         self.map_height = int(self.lib.tribal_village_get_map_height())
         self.actions = np.zeros(self.num_agents, dtype=np.uint8)
@@ -165,6 +170,7 @@ class CoworldTribalVillageEnv:
         cfg = NimConfig(
             max_steps=self.max_steps,
             seed=int(self.config.get("seed", 0)),
+            team_count=self.team_count,
             tumor_spawn_rate=self._nim_float("tumor_spawn_rate"),
             heart_reward=self._nim_float("heart_reward"),
             ore_reward=self._nim_float("ore_reward"),

@@ -16,8 +16,11 @@ const
   AgentMaxHp* = 5
 
   # World Objects
-  # Eight bases with six agents each -> 48 agents total (divisible by 12 and 16 for batching).
-  MapRoomObjectsHouses* = 8
+  # Runtime episodes activate two through eight villages. Storage remains sized
+  # for the eight-team maximum so the training ABI stays fixed at 48 agents.
+  MinTeamCount* = 2
+  MaxTeamCount* = 8
+  MapRoomObjectsHouses* = MaxTeamCount
   MapAgentsPerHouse* = 6
   MapRoomObjectsAgents* = MapRoomObjectsHouses * MapAgentsPerHouse  # 48 total agents
   MapRoomObjectsConverters* = 10
@@ -239,6 +242,7 @@ type
     # Core game parameters
     maxSteps*: int
     seed*: int
+    teamCount*: int
 
     # Combat configuration
     tumorSpawnRate*: float
@@ -1738,11 +1742,12 @@ proc init(env: Environment) =
 
   # Agents will now spawn with their villages/houses below
   # Clear and prepare village colors arrays
-  agentVillageColors.setLen(MapRoomObjectsAgents)  # Allocate space for all agents
+  let activeAgentCount = env.config.teamCount * MapAgentsPerHouse
+  agentVillageColors.setLen(activeAgentCount)
   teamColors.setLen(0)  # Clear team colors
   assemblerColors.clear()  # Clear assembler colors from previous game
   # Spawn houses with their assemblers, walls, and associated agents (tribes)
-  let numHouses = MapRoomObjectsHouses
+  let numHouses = env.config.teamCount
   var totalAgentsSpawned = 0
   var houseCenters: seq[IVec2] = @[]
   let villageSpawnPhase = randIntExclusive(r, 0, 1_000_000)
@@ -1799,7 +1804,7 @@ proc init(env: Environment) =
       teamColors.add(villageColor)
 
       # Spawn agents around this house
-      let agentsForThisHouse = min(MapAgentsPerHouse, MapRoomObjectsAgents - totalAgentsSpawned)
+      let agentsForThisHouse = min(MapAgentsPerHouse, activeAgentCount - totalAgentsSpawned)
 
       # Add the altar (assembler) with initial hearts and house bounds
       env.add(Thing(
@@ -1899,7 +1904,7 @@ proc init(env: Environment) =
           ))
 
           totalAgentsSpawned += 1
-          if totalAgentsSpawned >= MapRoomObjectsAgents:
+          if totalAgentsSpawned >= activeAgentCount:
             break
 
       # Note: Entrances are left empty (no walls placed there)
@@ -1914,7 +1919,7 @@ proc init(env: Environment) =
   # If there are still agents to spawn (e.g., if not enough houses), spawn them randomly
   # They will get a neutral color
   let neutralColor = color(0.5, 0.5, 0.5, 1.0)  # Gray for unaffiliated agents
-  while totalAgentsSpawned < MapRoomObjectsAgents:
+  while totalAgentsSpawned < activeAgentCount:
     let agentPos = r.randomEmptyPos(env)
     let agentId = totalAgentsSpawned
 
@@ -2075,6 +2080,7 @@ proc defaultEnvironmentConfig*(): EnvironmentConfig =
     # Core game parameters
     maxSteps: 1000,
     seed: 0,
+    teamCount: MaxTeamCount,
 
     # Combat configuration
     tumorSpawnRate: 0.1,
@@ -2133,7 +2139,7 @@ proc step*(env: Environment, actions: ptr array[MapAgents, uint8]) =
     env.actionTintPositions = kept
 
   # Decay shields
-  for i in 0 ..< MapAgents:
+  for i in 0 ..< env.agents.len:
     if env.shieldCountdown[i] > 0:
       env.shieldCountdown[i] = env.shieldCountdown[i] - 1
 
@@ -2144,7 +2150,8 @@ proc step*(env: Environment, actions: ptr array[MapAgents, uint8]) =
   # Single RNG for entire step - more efficient than multiple initRand calls
   var stepRng = initRand(env.currentStep)
 
-  for id, actionValue in actions[]:
+  for id in 0 ..< env.agents.len:
+    let actionValue = actions[][id]
     let agent = env.agents[id]
     if agent.frozen > 0:
       continue
@@ -2332,7 +2339,7 @@ proc step*(env: Environment, actions: ptr array[MapAgents, uint8]) =
   env.enforceZeroHpDeaths()
 
   # Respawn dead agents at their assemblers
-  for agentId in 0 ..< MapAgents:
+  for agentId in 0 ..< env.agents.len:
     let agent = env.agents[agentId]
 
     # Check if agent is dead and has a home assembler
@@ -2399,14 +2406,14 @@ proc step*(env: Environment, actions: ptr array[MapAgents, uint8]) =
   if env.currentStep >= env.config.maxSteps:
     # Team assembler rewards already applied in main loop above
     # Mark all living agents as truncated (episode ended due to time limit)
-    for i in 0..<MapAgents:
+    for i in 0..<env.agents.len:
       if env.terminated[i] == 0.0:
         env.truncated[i] = 1.0
     env.shouldReset = true
 
   # Check if all agents are terminated/truncated
   var allDone = true
-  for i in 0..<MapAgents:
+  for i in 0..<env.agents.len:
     if env.terminated[i] == 0.0 and env.truncated[i] == 0.0:
       allDone = false
       break

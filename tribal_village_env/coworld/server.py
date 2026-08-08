@@ -49,9 +49,10 @@ REPLAY_LOAD_ENV_VAR = "COGAME_LOAD_REPLAY_URI"
 GAME_HOST = os.environ.get("COGAME_HOST", "0.0.0.0")
 GAME_PORT = int(os.environ.get("COGAME_PORT", "8080"))
 
-PLAYER_COUNT = 48
-TEAM_COUNT = 8
+MIN_TEAM_COUNT = 2
+MAX_TEAM_COUNT = 8
 AGENTS_PER_TEAM = 6
+MAX_PLAYER_COUNT = MAX_TEAM_COUNT * AGENTS_PER_TEAM
 DEFAULT_MAX_STEPS = 2000
 DEFAULT_TICK_RATE = 20.0
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 180.0
@@ -140,6 +141,7 @@ def load_replay_payload(uri: str) -> dict[str, Any]:
 class CoworldConfig:
     tokens: list[str]
     players: list[dict[str, str]]
+    team_count: int
     max_steps: int
     tick_rate: float
     player_connect_timeout_seconds: float
@@ -147,16 +149,28 @@ class CoworldConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoworldConfig":
-        tokens = [str(token) for token in data.get("tokens", [])]
-        if len(tokens) != PLAYER_COUNT:
+        team_count = int(data["team_count"])
+        if team_count < MIN_TEAM_COUNT or team_count > MAX_TEAM_COUNT:
             raise ValueError(
-                f"Tribal Village Coworld requires {PLAYER_COUNT} tokens, "
+                f"team_count must be between {MIN_TEAM_COUNT} and {MAX_TEAM_COUNT}"
+            )
+        player_count = team_count * AGENTS_PER_TEAM
+        num_agents = int(data["num_agents"])
+        if num_agents != player_count:
+            raise ValueError(
+                f"num_agents must equal team_count * {AGENTS_PER_TEAM}; "
+                f"got {num_agents} for {team_count} teams"
+            )
+        tokens = [str(token) for token in data.get("tokens", [])]
+        if len(tokens) != player_count:
+            raise ValueError(
+                f"{team_count}-team Tribal Village requires {player_count} tokens, "
                 f"got {len(tokens)}"
             )
         if any(not token for token in tokens):
             raise ValueError("Coworld tokens must be non-empty strings")
 
-        players = _player_configs(data.get("players", []))
+        players = _player_configs(data.get("players", []), player_count)
         max_steps = int(data.get("max_steps", DEFAULT_MAX_STEPS))
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
@@ -179,6 +193,7 @@ class CoworldConfig:
         return cls(
             tokens=tokens,
             players=players,
+            team_count=team_count,
             max_steps=max_steps,
             tick_rate=tick_rate,
             player_connect_timeout_seconds=connect_timeout,
@@ -189,10 +204,14 @@ class CoworldConfig:
     def player_names(self) -> list[str]:
         return [player["name"] for player in self.players]
 
+    @property
+    def player_count(self) -> int:
+        return self.team_count * AGENTS_PER_TEAM
 
-def _player_configs(value: Any) -> list[dict[str, str]]:
-    if not isinstance(value, list) or len(value) != PLAYER_COUNT:
-        raise ValueError(f"players must be an array of {PLAYER_COUNT} objects")
+
+def _player_configs(value: Any, player_count: int) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) != player_count:
+        raise ValueError(f"players must be an array of {player_count} objects")
     players: list[dict[str, str]] = []
     for slot, player in enumerate(value):
         if not isinstance(player, dict):
@@ -204,18 +223,15 @@ def _player_configs(value: Any) -> list[dict[str, str]]:
     return players
 
 
-def _default_players() -> list[dict[str, str]]:
-    return [{"name": f"Agent {slot}"} for slot in range(PLAYER_COUNT)]
-
-
 def _make_env(
     *,
     max_steps: int,
     seed: int = 1,
+    team_count: int,
 ) -> CoworldTribalVillageEnv:
     return CoworldTribalVillageEnv(
         max_steps=max_steps,
-        config={"seed": seed},
+        config={"seed": seed, "team_count": team_count},
     )
 
 
@@ -233,14 +249,15 @@ class TribalVillageCoworld:
         self.env = _make_env(
             max_steps=config.max_steps,
             seed=config.seed,
+            team_count=config.team_count,
         )
         self.env.reset()
-        self.latest_rewards = [0.0 for _ in range(PLAYER_COUNT)]
-        self.latest_terminated = [False for _ in range(PLAYER_COUNT)]
-        self.latest_truncated = [False for _ in range(PLAYER_COUNT)]
-        self.actions = [0 for _ in range(PLAYER_COUNT)]
-        self.action_versions = [0 for _ in range(PLAYER_COUNT)]
-        self.cumulative_scores = [0.0 for _ in range(PLAYER_COUNT)]
+        self.latest_rewards = [0.0 for _ in range(config.player_count)]
+        self.latest_terminated = [False for _ in range(config.player_count)]
+        self.latest_truncated = [False for _ in range(config.player_count)]
+        self.actions = [0 for _ in range(config.player_count)]
+        self.action_versions = [0 for _ in range(config.player_count)]
+        self.cumulative_scores = [0.0 for _ in range(config.player_count)]
         self.action_log: list[list[int]] = []
         self.player_websockets: dict[int, list[WebSocket]] = {}
         self.connected_slots: set[int] = set()
@@ -269,7 +286,11 @@ class TribalVillageCoworld:
             await websocket.close(code=1008)
             return
         token = websocket.query_params.get("token", "")
-        if slot < 0 or slot >= PLAYER_COUNT or self.config.tokens[slot] != token:
+        if (
+            slot < 0
+            or slot >= self.config.player_count
+            or self.config.tokens[slot] != token
+        ):
             await websocket.close(code=1008)
             return
 
@@ -277,7 +298,7 @@ class TribalVillageCoworld:
         async with self.lock:
             self.player_websockets.setdefault(slot, []).append(websocket)
             self.connected_slots.add(slot)
-            should_start = len(self.connected_slots) == PLAYER_COUNT
+            should_start = len(self.connected_slots) == self.config.player_count
         await websocket.send_json(self.player_message(slot))
         if should_start:
             self.start_game()
@@ -363,13 +384,17 @@ class TribalVillageCoworld:
 
     def _step(self, actions: list[int]) -> None:
         self.env.step([int(action) for action in actions])
-        self.latest_rewards = [float(value) for value in self.env.rewards.tolist()]
-        self.latest_terminated = [bool(value) for value in self.env.terminals.tolist()]
+        self.latest_rewards = [
+            float(value) for value in self.env.rewards[: self.config.player_count]
+        ]
+        self.latest_terminated = [
+            bool(value) for value in self.env.terminals[: self.config.player_count]
+        ]
         self.latest_truncated = [
             bool(value) or self.env.step_count >= self.config.max_steps
-            for value in self.env.truncations.tolist()
+            for value in self.env.truncations[: self.config.player_count]
         ]
-        for slot in range(PLAYER_COUNT):
+        for slot in range(self.config.player_count):
             self.cumulative_scores[slot] += self.latest_rewards[slot]
         self.action_log.append(actions)
 
@@ -411,6 +436,7 @@ class TribalVillageCoworld:
             "game_config": {
                 "seed": self.config.seed,
                 "max_steps": self.config.max_steps,
+                "team_count": self.config.team_count,
             },
         }
 
@@ -430,7 +456,7 @@ class TribalVillageCoworld:
     def team_scores(self) -> list[float]:
         return [
             float(sum(self.cumulative_scores[start : start + AGENTS_PER_TEAM]))
-            for start in range(0, PLAYER_COUNT, AGENTS_PER_TEAM)
+            for start in range(0, self.config.player_count, AGENTS_PER_TEAM)
         ]
 
     def results(self) -> dict[str, Any]:
@@ -449,6 +475,7 @@ class TribalVillageCoworld:
                 "max_steps": self.config.max_steps,
                 "tick_rate": self.config.tick_rate,
                 "players": self.config.player_names,
+                "team_count": self.config.team_count,
             },
             "ticks": [
                 {"a": encode_action_delta(actions)} for actions in self.action_log
@@ -459,7 +486,7 @@ class TribalVillageCoworld:
     def _all_done(self) -> bool:
         return all(
             bool(self.latest_terminated[slot]) or bool(self.latest_truncated[slot])
-            for slot in range(PLAYER_COUNT)
+            for slot in range(self.config.player_count)
         )
 
 
@@ -487,6 +514,16 @@ class TribalVillageReplay:
         if not isinstance(config, dict):
             raise ValueError("Replay initial config must be an object")
         self.player_names = replay_player_names(config.get("players"))
+        self.team_count = int(config["team_count"])
+        if self.team_count < MIN_TEAM_COUNT or self.team_count > MAX_TEAM_COUNT:
+            raise ValueError(
+                f"team_count must be between {MIN_TEAM_COUNT} and {MAX_TEAM_COUNT}"
+            )
+        self.player_count = self.team_count * AGENTS_PER_TEAM
+        if len(self.player_names) != self.player_count:
+            raise ValueError(
+                f"Replay has {len(self.player_names)} players for {self.team_count} teams"
+            )
         self.max_steps = max(1, len(self.actions))
         self.tick_rate = float(config.get("tick_rate", DEFAULT_TICK_RATE))
         self.seed = max(1, int(config.get("seed", 1)))
@@ -515,7 +552,7 @@ class TribalVillageReplay:
                 actions = self.actions[env.step_count]
                 replay_actions = [
                     int(actions[slot]) if slot < len(actions) else 0
-                    for slot in range(PLAYER_COUNT)
+                    for slot in range(self.player_count)
                 ]
                 env.step(replay_actions)
                 await asyncio.sleep(1.0 / (self.tick_rate * playback.speed))
@@ -557,6 +594,7 @@ class TribalVillageReplay:
         env = _make_env(
             max_steps=self.max_steps,
             seed=self.seed,
+            team_count=self.team_count,
         )
         env.reset()
         for _ in range(tick):
@@ -564,7 +602,7 @@ class TribalVillageReplay:
             env.step(
                 [
                     int(actions[slot]) if slot < len(actions) else 0
-                    for slot in range(PLAYER_COUNT)
+                    for slot in range(self.player_count)
                 ]
             )
         return env
@@ -587,8 +625,8 @@ def replay_tick(value: Any, max_steps: int) -> int:
 
 
 def replay_player_names(value: Any) -> list[str]:
-    if not isinstance(value, list) or len(value) != PLAYER_COUNT:
-        return [player["name"] for player in _default_players()]
+    if not isinstance(value, list):
+        raise ValueError("Replay players must be an array")
     names: list[str] = []
     for slot, player in enumerate(value):
         if isinstance(player, dict):
@@ -600,11 +638,11 @@ def replay_player_names(value: Any) -> list[str]:
 
 
 def encode_action_delta(actions: list[int]) -> str:
-    data = bytes(
-        _coerce_action({"action": action}) for action in actions[:PLAYER_COUNT]
-    )
-    if len(data) < PLAYER_COUNT:
-        data += bytes(PLAYER_COUNT - len(data))
+    if len(actions) > MAX_PLAYER_COUNT:
+        raise ValueError(
+            f"Replay action rows may contain at most {MAX_PLAYER_COUNT} actions"
+        )
+    data = bytes(_coerce_action({"action": action}) for action in actions)
     return base64.b64encode(data).decode("ascii")
 
 
@@ -624,7 +662,10 @@ def decode_tick_deltas(raw_ticks: Any) -> list[list[int]]:
         except Exception as exc:
             raise ValueError("Replay tick action delta is not valid base64") from exc
         ticks.append(
-            [_coerce_action({"action": action}) for action in decoded[:PLAYER_COUNT]]
+            [
+                _coerce_action({"action": action})
+                for action in decoded[:MAX_PLAYER_COUNT]
+            ]
         )
     return ticks
 

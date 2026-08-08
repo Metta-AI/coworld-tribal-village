@@ -31,7 +31,7 @@ How it works:
   The player builds a local `Environment` with that config and resets it,
   matching the server's own environment construction exactly.
 - Each observation for tick T catches the mirror up (`while currentStep < T`),
-  computes the 48-agent action vector from the built-in AI controller, sends
+  computes the active 12-48-agent action vector from the built-in AI controller, sends
   this slot's action as `{"type": "action", "action": N}`, and steps the
   mirror.
 - Because every slot runs the same deterministic mirror, the merged action

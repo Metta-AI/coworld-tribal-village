@@ -1,7 +1,8 @@
 defaults:
-  seating: baseline_window
-  fill_seats: duplicate
-  min_entries_to_start: 2
+  seating: team_blocks
+  team_count: 8
+  fill_seats: strict
+  min_entries_to_start: 3
   stage:
     label: Round
     episodes: 1

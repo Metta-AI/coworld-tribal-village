@@ -14,7 +14,7 @@ requires "windy >= 0.5.0"
 import std/[os, strformat, strutils]
 
 proc buildShared(ext: string) =
-  let cmd = "nim c --app:lib --mm:arc --opt:speed -d:danger --out:libtribal_village." &
+  let cmd = "nim c --skipParentCfg:on --app:lib --mm:arc --opt:speed -d:danger --out:libtribal_village." &
             ext & " src/tribal_village_interface.nim"
   exec cmd
 
@@ -25,7 +25,7 @@ task buildLib, "Build shared library for PufferLib (nimby-friendly)":
   buildShared(ext)
 
 task run, "Run the tribal village game":
-  exec "nim c -r tribal_village.nim"
+  exec "nim c --skipParentCfg:on -r tribal_village.nim"
 
 task lib, "Build shared library for PufferLib (alias for buildLib)":
   let ext = when defined(windows): "dll"
@@ -56,6 +56,7 @@ task wasm, "Build Tribal Village WASM demo":
 
   var cmdParts = @["nim", "c"]
 
+  cmdParts.add("--skipParentCfg:on")
   cmdParts.add("--app:gui")
   cmdParts.add("--threads:off")
   cmdParts.add("--gc:arc")

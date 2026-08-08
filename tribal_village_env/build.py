@@ -55,6 +55,7 @@ def _build_library(project_root: Path) -> Path:
     cmd = [
         "nim",
         "c",
+        "--skipParentCfg:on",
         "--app:lib",
         "--mm:arc",
         "--opt:speed",
@@ -126,6 +127,7 @@ def _build_wasm_bundle(project_root: Path) -> Path:
     cmd = [
         "nim",
         "c",
+        "--skipParentCfg:on",
         "--app:gui",
         "--threads:off",
         "--gc:arc",

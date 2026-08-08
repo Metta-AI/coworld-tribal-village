@@ -82,7 +82,7 @@ class RoundStartView:
     def divisions(self) -> list[DivisionSnapshot]:
         return [self._division_snapshot(division) for division in self.round_start.divisions]
 
-    def variant(self, rule: DivisionRule | None) -> tuple[str, int, dict[str, Any] | None]:
+    def variant(self, rule: DivisionRule | None) -> tuple[str, int, int | None, dict[str, Any] | None]:
         default_variant_id = self.round_start.variants[0].id if self.round_start.variants else "default"
         variant_id = str(self.round_config.get("variant_id") or default_variant_id)
         variant = next((candidate for candidate in self.round_start.variants if candidate.id == variant_id), None)
@@ -95,9 +95,11 @@ class RoundStartView:
             game_config = variant_game_config | dict(rule.game_config)
         effective_game_config = game_config or variant_game_config
         num_agents = effective_game_config.get("num_agents")
+        team_count = effective_game_config.get("team_count")
+        resolved_team_count = team_count if isinstance(team_count, int) else None
         if isinstance(num_agents, int):
-            return variant_id, num_agents, game_config
-        return variant_id, len(self.entries(None)) or 1, game_config
+            return variant_id, num_agents, resolved_team_count, game_config
+        return variant_id, len(self.entries(None)) or 1, resolved_team_count, game_config
 
     def entries(self, rule: DivisionRule | None) -> list[PolicyPoolEntry]:
         entries = division_entries(self.current_division, self.memberships, rule)

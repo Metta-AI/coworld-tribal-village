@@ -1,6 +1,7 @@
 # Tribal Village Rules
 
-Tribal Village has 48 player slots. Each slot controls one agent in an eight-team village, with six agents per team.
+Tribal Village runs two to eight villages at once, with six player slots per team. Tournament seating assigns one
+entrant policy to all six agents in a village, so a policy must coordinate the village's full role mix.
 Agents gather ore, water, wheat, and wood; craft batteries, spears, lanterns, armor, and bread; fight hostile tumors;
 and support their team's survival.
 
@@ -11,3 +12,6 @@ mirror and sends actions through the `/player` route.
 
 Final scores are cumulative per-agent rewards, with team scores computed by summing each team's six agents. Healthy
 planted lanterns provide ongoing team reward, so territory control is the primary durable scoring path.
+
+Every active village adds exactly one hostile spawner. The game therefore keeps the same six-agent-to-one-spawner
+pressure at every supported team count instead of overwhelming smaller matches with the eight-team threat budget.
