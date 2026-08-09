@@ -3,12 +3,12 @@
   "ladder": {
     "enabled": true,
     "scheduler": {
-      "strategy": "clone_fill",
+      "strategy": "team_n",
       "insufficient_players": "do_not_run",
-      "seat_count": 48,
-      "episodes_per_entrant": 1,
-      "clone_score_aggregation": "mean",
-      "variant_rotation": ["8-teams"]
+      "team_count": 3,
+      "team_layout": "blocks",
+      "min_episodes_per_entrant": 1,
+      "variant_rotation": ["default"]
     },
     "ranking": {
       "algorithm": "score",
