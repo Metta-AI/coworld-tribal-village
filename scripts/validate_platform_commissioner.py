@@ -63,17 +63,19 @@ def main() -> None:
     seats = len(config["players"])
     topology = contract["topology"]
     assert topology["kind"] == "team_blocks"
-    assert seats == config["num_agents"] == contract["seat_count"] == 48
-    assert config["team_count"] == topology["team_count"] == 8
+    assert seats == config["num_agents"] == contract["seat_count"] == 18
+    assert config["team_count"] == topology["team_count"] == 3
     assert seats == topology["team_count"] * topology["seats_per_team"]
     assert [item["division_id"] for item in active["ladder"]["divisions"]] == [contract["competition_division_id"]]
     scheduler = active["ladder"]["scheduler"]
-    assert scheduler["strategy"] == "clone_fill"
-    assert scheduler["seat_count"] == seats
+    assert scheduler["strategy"] == "team_n"
+    assert scheduler["team_count"] == topology["team_count"]
+    assert scheduler["team_layout"] == "blocks"
+    assert scheduler["min_episodes_per_entrant"] == 1
     assert scheduler["variant_rotation"] == [contract["variant_id"]]
     assert "qualification" not in active["ladder"]
     assert contract["admission"] == "direct_competition"
-    print(f"validated {contract['league_id']} ({contract['variant_id']}, {seats} clone-filled seats)")
+    print(f"validated {contract['league_id']} ({contract['variant_id']}, {topology['team_count']}x6 team blocks)")
 
 
 if __name__ == "__main__":
