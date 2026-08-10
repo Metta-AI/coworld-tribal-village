@@ -9,10 +9,10 @@
 > [!NOTE]
 > Coworld repo status: **canonical and certified** (`coworld`; the obsolete `coworld-template` topic should not be present).
 > Canonical repository: `Metta-AI/coworld-tribal-village`.
-> Canonical release: `tribal_village:0.1.28` (`cow_f9094e3c-2860-4e77-9a13-eac56f754683`).
+> Canonical release: `tribal_village:0.1.30` (`cow_6e77a73f-dd53-4371-b598-4965c0ffb12b`).
 > Manifest template: `coworld_manifest_template.json` (resolved by `coworld build`).
 > Build path: `Dockerfile`, `players/villager/Dockerfile`
-> Certification: hosted certification passed on 2026-08-08, including smoke episode, result, replay, bundled-player, and supporting-role checks.
+> Certification: hosted certification passed on 2026-08-10, including smoke episode, result, replay, bundled-player, and supporting-role checks.
 <!-- COWORLD-REPO-STATUS:END -->
 
 
@@ -57,12 +57,12 @@ Tribal Village now ships a Coworld package surface with 12-48 player slots, one 
 current `coworld` CLI from the Metta repository:
 
 ```bash
-uv run coworld build --version 0.1.28
+uv run coworld build --version 0.1.30
 uv run coworld certify dist/coworld_manifest.json
 uv run coworld play dist/coworld_manifest.json
 ```
 
-The canonical `0.1.28` artifact is already published; do not reuse that version
+The canonical `0.1.30` artifact is already published; do not reuse that version
 for a changed manifest or image. Future releases are manual through **Upload
 Coworld (manual)**. Every run builds immutable source references, attests the
 three local image hashes, and runs local Coworld certification. A confirmed
