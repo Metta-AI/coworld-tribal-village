@@ -3,11 +3,19 @@
   "competition_division_id": "div_60d931c6-0d6d-483c-9a51-bf33f36016b7",
   "legacy_qualifier_division_id": "div_87ebea85-52ca-42ef-a5c3-555f3db373e5",
   "manifest_path": "coworld_manifest_template.json",
-  "variant_id": "default",
-  "seat_count": 18,
+  "active_variant_id": "default",
+  "supported_team_counts": [2, 3, 4, 5, 6, 7, 8],
+  "variant_by_team_count": {
+    "2": "2-teams",
+    "3": "default",
+    "4": "4-teams",
+    "5": "5-teams",
+    "6": "6-teams",
+    "7": "7-teams",
+    "8": "8-teams"
+  },
   "topology": {
     "kind": "team_blocks",
-    "team_count": 3,
     "seats_per_team": 6
   },
   "admission": "direct_competition"

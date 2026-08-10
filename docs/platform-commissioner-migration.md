@@ -1,9 +1,11 @@
 # Platform commissioner migration
 
 Tribal Village's live league (`league_aedc4933-a75a-40ab-aaef-1653e0796875`)
-seats one champion in each of the default variant's three villages. Platform
-`team_n` with block layout is the direct replacement for its container
-commissioner.
+seats one champion in each active village. Platform `team_n` with block layout
+is the direct replacement for its container commissioner. The checked-in active
+settings currently select three teams because the live league has three
+champions; the manifest and contract support every team count from two through
+eight.
 
 ## Proposed ladder
 
@@ -35,19 +37,21 @@ ladder:
       disqualify_after_consecutive_failures: 3
 ```
 
-The planner derives `ceil(champions / 3)` tables, assigns one champion to each
-village, and clones that champion across the village's contiguous six-seat
-block. Clone seats are filler-marked after the first occurrence so every
-champion receives one credited score per episode. This matches the live
-container's default 18-seat plan; a production round readback confirmed the
-shape `[A×6, B×6, C×6]` rather than 48-seat self-play.
+For a configured N-team shape, the planner derives `ceil(champions / N)` tables,
+assigns one champion to each village, and clones that champion across the
+village's contiguous six-seat block. Clone seats are filler-marked after the
+first occurrence so every champion receives one credited score per episode. A
+production round readback for the current three-team shape confirmed
+`[A×6, B×6, C×6]` rather than 48-seat self-play.
 
 `platform_commissioner/settings.staged.json` and `settings.active.json` are
 complete settings-API payloads and differ only at `ladder.enabled`. The explicit
 default-variant rotation pins the live 18-seat, three-team shape.
-`contract.json` pins the live IDs and asserts the 3×6 topology against the
-manifest. The repository validator checks all three artifacts against Metta's
-current schemas.
+`contract.json` pins the live IDs, the 2-8 variant map, and the six-seat team
+block invariant. The repository validator checks all seven shapes against
+Metta's current schemas. Render the complete settings payload for a roster size
+with `python scripts/render_platform_settings.py N`; apply that full payload
+when the active champion count changes.
 
 ## Proof and cutover
 

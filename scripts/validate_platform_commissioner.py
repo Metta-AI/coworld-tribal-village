@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 from jsonschema import Draft202012Validator
+from render_platform_settings import settings_for_team_count
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,28 +55,50 @@ def main() -> None:
     del active_without_enabled["ladder"]["enabled"]
     assert staged_without_enabled == active_without_enabled
 
-    schema = load_json(args.metta_root / "packages" / "coworld" / "src" / "coworld" / "coworld_manifest_schema.json")
+    schema = load_json(
+        args.metta_root
+        / "packages"
+        / "coworld"
+        / "src"
+        / "coworld"
+        / "coworld_manifest_schema.json"
+    )
     resolved_manifest = json.loads(json.dumps(manifest))
     resolved_manifest["game"].setdefault("version", "0.0.0")
     Draft202012Validator(schema).validate(resolved_manifest)
-    variant = next(item for item in manifest["variants"] if item["id"] == contract["variant_id"])
-    config = variant["game_config"]
-    seats = len(config["players"])
     topology = contract["topology"]
     assert topology["kind"] == "team_blocks"
-    assert seats == config["num_agents"] == contract["seat_count"] == 18
-    assert config["team_count"] == topology["team_count"] == 3
-    assert seats == topology["team_count"] * topology["seats_per_team"]
-    assert [item["division_id"] for item in active["ladder"]["divisions"]] == [contract["competition_division_id"]]
+    assert contract["supported_team_counts"] == list(range(2, 9))
+    variants = {item["id"]: item for item in manifest["variants"]}
+    for team_count in contract["supported_team_counts"]:
+        variant_id = contract["variant_by_team_count"][str(team_count)]
+        config = variants[variant_id]["game_config"]
+        seats = len(config["players"])
+        assert config["team_count"] == team_count
+        assert seats == config["num_agents"] == team_count * topology["seats_per_team"]
+        rendered = settings_for_team_count(team_count)
+        validate_settings(rendered, ladder_model)
+        rendered_scheduler = rendered["ladder"]["scheduler"]
+        assert rendered_scheduler["team_count"] == team_count
+        assert rendered_scheduler["variant_rotation"] == [variant_id]
+    assert [item["division_id"] for item in active["ladder"]["divisions"]] == [
+        contract["competition_division_id"]
+    ]
     scheduler = active["ladder"]["scheduler"]
     assert scheduler["strategy"] == "team_n"
-    assert scheduler["team_count"] == topology["team_count"]
+    active_team_count = scheduler["team_count"]
+    assert active_team_count in contract["supported_team_counts"]
     assert scheduler["team_layout"] == "blocks"
     assert scheduler["min_episodes_per_entrant"] == 1
-    assert scheduler["variant_rotation"] == [contract["variant_id"]]
+    active_variant_id = contract["variant_by_team_count"][str(active_team_count)]
+    assert active_variant_id == contract["active_variant_id"]
+    assert scheduler["variant_rotation"] == [active_variant_id]
     assert "qualification" not in active["ladder"]
     assert contract["admission"] == "direct_competition"
-    print(f"validated {contract['league_id']} ({contract['variant_id']}, {topology['team_count']}x6 team blocks)")
+    print(
+        f"validated {contract['league_id']} "
+        f"({active_team_count}x{topology['seats_per_team']} active; 2-8 supported)"
+    )
 
 
 if __name__ == "__main__":
