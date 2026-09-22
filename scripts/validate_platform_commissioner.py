@@ -7,7 +7,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from types import ModuleType
 
 from jsonschema import Draft202012Validator
 from render_platform_settings import settings_for_team_count
@@ -20,11 +19,8 @@ def load_json(path: Path) -> dict:
 
 
 def load_metta_ladder_model(metta_root: Path):
-    sys.path.insert(0, str(metta_root / "app_backend" / "src"))
-    models = ModuleType("metta.app_backend.v2.ladders.models")
-    models.DEFAULT_ELO_RATING = 1500.0
-    sys.modules[models.__name__] = models
-    from metta.app_backend.v2.ladders.config import LeagueLadderConfig
+    sys.path.insert(0, str(metta_root / "packages" / "observatory-core" / "src"))
+    from observatory_core.v2.ladders.config import LeagueLadderConfig
 
     return LeagueLadderConfig
 
