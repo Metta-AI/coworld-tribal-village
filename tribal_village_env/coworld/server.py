@@ -416,6 +416,7 @@ class TribalVillageCoworld:
                             current.remove(websocket)
 
     def player_message(self, slot: int, *, final: bool = False) -> dict[str, Any]:
+        observation = self.env.player_observation(slot)
         return {
             "type": "final" if final or self.done else "observation",
             "slot": slot,
@@ -427,6 +428,12 @@ class TribalVillageCoworld:
             "terminated": bool(self.latest_terminated[slot]),
             "truncated": bool(self.latest_truncated[slot]),
             "done": final or self.done,
+            "observation": {
+                "dtype": "uint8",
+                "shape": list(observation.shape),
+                "encoding": "base64",
+                "data": base64.b64encode(observation.tobytes()).decode("ascii"),
+            },
             "action_space": {
                 "type": "discrete",
                 "n": ACTION_SPACE_SIZE,

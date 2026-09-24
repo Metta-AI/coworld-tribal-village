@@ -76,6 +76,17 @@ visuals use the canonical full-world sprite-cell stream on `/global` and `/repla
 (`players/villager/`, a native Nim binary modeled on Crewrift's `notsus`) runs the existing role-based scripted AI in
 a deterministic local mirror and communicates through the normal `/player` WebSocket route.
 
+Each `/player` observation carries that slot's native `uint8` 26×11×11 tensor as base64, with `dtype`, `shape`,
+and `encoding` metadata. The tensor uses the same engine observation path as the optional PufferLib wrapper. The
+`/global` sprite frame is a separate spectator view.
+
+For headless training, run `python tools/training_bridge.py --variant certification --mode choice`. The bridge accepts
+one JSON command per line (`reset`, `encode`, `teacher`, `step`) and supports certification, default, and `2-teams`
+through `8-teams`. `--steps N` bounds a pilot episode; omit it for the variant's full episode. Choice mode exposes a
+64-action numeric codec for Metta RL and PufferLib. Text mode exposes the same player observation and action schema
+for Metta post-training. The teacher is the native scripted controller. The existing optional
+`tribal-village train` command remains the direct native PufferLib path.
+
 Replay mode is the same image with `COGAME_LOAD_REPLAY_URI` set. `/client/replay` autoplays, loops back to tick 0,
 draws `#slot name` labels above agents, and supports the standard faster/slower controls. Replay artifacts are compact
 JSON: an initial seed/config plus base64-encoded per-tick action deltas, not rendered frame dumps.
