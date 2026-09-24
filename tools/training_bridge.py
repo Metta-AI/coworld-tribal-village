@@ -68,7 +68,8 @@ class TrainingSession:
             int.from_bytes(
                 hashlib.sha256(str(request["seed"]).encode()).digest()[:4], "big"
             )
-            or 1
+            % (2**31 - 1)
+            + 1
         )
         self.env = CoworldTribalVillageEnv(
             max_steps=self.max_steps,

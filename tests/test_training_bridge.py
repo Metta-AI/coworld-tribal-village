@@ -62,6 +62,21 @@ def test_text_mode_uses_same_action_and_observation() -> None:
         session.close()
 
 
+def test_hashed_episode_seed_stays_in_native_range() -> None:
+    session = TrainingSession("certification", "choice", 1)
+    try:
+        first = session.reset({"players": 18, "seed": "full-cert"})
+        assert session.env is not None
+        seed = session.env.config["seed"]
+        assert 1 <= seed <= 2**31 - 1
+        second = session.reset({"players": 18, "seed": "full-cert"})
+        assert session.env.config["seed"] == seed
+        assert first["semantic_view"] == second["semantic_view"]
+    finally:
+        session.close()
+
+
 if __name__ == "__main__":
     test_all_roster_sizes_finish_with_native_teacher()
     test_text_mode_uses_same_action_and_observation()
+    test_hashed_episode_seed_stays_in_native_range()
