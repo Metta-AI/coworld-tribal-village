@@ -149,6 +149,13 @@ async def assert_live_websockets(port: int) -> int:
                 assert message["type"] == "observation"
                 assert message["slot"] == slot
                 assert message["action_space"]["n"] == 64
+                observation = message["observation"]
+                assert observation["dtype"] == "uint8"
+                assert observation["shape"] == [26, 11, 11]
+                assert (
+                    len(base64.b64decode(observation["data"], validate=True))
+                    == 26 * 11 * 11
+                )
                 seed = int(message["game_config"]["seed"])
                 assert seed >= 1
                 if episode_seed is None:
@@ -156,6 +163,19 @@ async def assert_live_websockets(port: int) -> int:
                 assert seed == episode_seed
                 assert "view" not in message
                 assert "frame" not in message
+
+                if slot == 0:
+                    mirror = CoworldTribalVillageEnv(
+                        max_steps=4, config={"seed": seed, "team_count": TEAM_COUNT}
+                    )
+                    try:
+                        mirror.reset()
+                        assert (
+                            base64.b64decode(observation["data"])
+                            == mirror.player_observation(0).tobytes()
+                        )
+                    finally:
+                        mirror.close()
 
             for slot, player_ws in enumerate(player_websockets):
                 if slot != DELAYED_FIRST_ACTION_SLOT:

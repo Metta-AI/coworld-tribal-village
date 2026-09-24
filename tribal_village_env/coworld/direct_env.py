@@ -85,6 +85,11 @@ class CoworldTribalVillageEnv:
         self._setup_ctypes_interface()
 
         self.num_agents = int(self.lib.tribal_village_get_num_agents())
+        self.observation_shape = (
+            int(self.lib.tribal_village_get_obs_layers()),
+            int(self.lib.tribal_village_get_obs_width()),
+            int(self.lib.tribal_village_get_obs_height()),
+        )
         self.team_count = int(self.config.get("team_count", len(TEAM_COLORS)))
         if self.team_count < 2 or self.team_count > len(TEAM_COLORS):
             raise ValueError("team_count must be between 2 and 8")
@@ -92,6 +97,9 @@ class CoworldTribalVillageEnv:
         self.map_width = int(self.lib.tribal_village_get_map_width())
         self.map_height = int(self.lib.tribal_village_get_map_height())
         self.actions = np.zeros(self.num_agents, dtype=np.uint8)
+        self.observations = np.zeros(
+            (self.num_agents, *self.observation_shape), dtype=np.uint8
+        )
         self.rewards = np.zeros(self.num_agents, dtype=np.float32)
         self.terminals = np.zeros(self.num_agents, dtype=np.uint8)
         self.truncations = np.zeros(self.num_agents, dtype=np.uint8)
@@ -115,19 +123,13 @@ class CoworldTribalVillageEnv:
                 ctypes.c_int32,
             ),
             (
-                "tribal_village_reset_for_coworld",
-                _buffers_without_actions(),
+                "tribal_village_reset_and_get_obs",
+                [ctypes.c_void_p] * 5,
                 ctypes.c_int32,
             ),
             (
-                "tribal_village_step_for_coworld",
-                [
-                    ctypes.c_void_p,
-                    ctypes.c_void_p,
-                    ctypes.c_void_p,
-                    ctypes.c_void_p,
-                    ctypes.c_void_p,
-                ],
+                "tribal_village_step_with_pointers",
+                [ctypes.c_void_p] * 6,
                 ctypes.c_int32,
             ),
             (
@@ -142,6 +144,9 @@ class CoworldTribalVillageEnv:
             ),
             ("tribal_village_destroy", [ctypes.c_void_p], None),
             ("tribal_village_get_num_agents", [], ctypes.c_int32),
+            ("tribal_village_get_obs_layers", [], ctypes.c_int32),
+            ("tribal_village_get_obs_width", [], ctypes.c_int32),
+            ("tribal_village_get_obs_height", [], ctypes.c_int32),
             ("tribal_village_get_map_width", [], ctypes.c_int32),
             ("tribal_village_get_map_height", [], ctypes.c_int32),
             (
@@ -198,8 +203,9 @@ class CoworldTribalVillageEnv:
 
     def reset(self) -> None:
         self.step_count = 0
-        ok = self.lib.tribal_village_reset_for_coworld(
+        ok = self.lib.tribal_village_reset_and_get_obs(
             self.env_ptr,
+            self.observations.ctypes.data_as(ctypes.c_void_p),
             self.rewards.ctypes.data_as(ctypes.c_void_p),
             self.terminals.ctypes.data_as(ctypes.c_void_p),
             self.truncations.ctypes.data_as(ctypes.c_void_p),
@@ -212,9 +218,10 @@ class CoworldTribalVillageEnv:
         for slot, action in enumerate(actions[: self.num_agents]):
             if 0 <= int(action) < ACTION_SPACE_SIZE:
                 self.actions[slot] = np.uint8(action)
-        ok = self.lib.tribal_village_step_for_coworld(
+        ok = self.lib.tribal_village_step_with_pointers(
             self.env_ptr,
             self.actions.ctypes.data_as(ctypes.c_void_p),
+            self.observations.ctypes.data_as(ctypes.c_void_p),
             self.rewards.ctypes.data_as(ctypes.c_void_p),
             self.terminals.ctypes.data_as(ctypes.c_void_p),
             self.truncations.ctypes.data_as(ctypes.c_void_p),
@@ -264,14 +271,13 @@ class CoworldTribalVillageEnv:
         y = int(self.lib.tribal_village_get_agent_y(self.env_ptr, int(slot)))
         return x, y
 
+    def player_observation(self, slot: int) -> np.ndarray:
+        return self.observations[slot]
+
     def close(self) -> None:
         if getattr(self, "env_ptr", None):
             self.lib.tribal_village_destroy(self.env_ptr)
             self.env_ptr = None
-
-
-def _buffers_without_actions() -> list[Any]:
-    return [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
 
 
 def _library_path() -> Path:
