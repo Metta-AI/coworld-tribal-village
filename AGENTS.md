@@ -74,11 +74,12 @@ vendored/third-party code or Metta, Fabric, Fabric Research, or Polyworld.
   NEVER delete, prune, rotate, truncate, rewrite or move any of them. Do not
   redirect coding-agent storage to temporary directories.
 - This policy does not authorize cleanup. Leave existing artifacts, other
-  tasks' outputs and the user's Dota2 allocation untouched.
+  tasks' outputs untouched.
 - For AGENTS.md-only changes, use documentation checks (`git diff --check`
   and diff review); do not run game builds, dependency sync or populate global
   build/dependency caches.
-- Repository-specific diagnostic reference: `tests/smoke_coworld_runtime.py` already uses a unique
+- Repository-specific diagnostic reference:
+  `tests/smoke_coworld_runtime.py` already uses a unique
   `tempfile.TemporaryDirectory(prefix="tribal-village-coworld-")` for its
   disposable config/results/replay fixture. Reuse that pattern for local QA;
   explicitly retained replays are not disposable fixtures.
