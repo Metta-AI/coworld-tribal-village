@@ -39,4 +39,6 @@ exits. It draws public terrain colors and entity markers with the shared shape
 batcher. The view intentionally does not implement sprite artwork, animation,
 input, a live network subscriber or replay controls. Successful execution proves
 a detached presentation boundary; it does not establish a replacement RL engine,
-WASM parity, long-episode determinism or production visual/performance parity.
+browser parity, long-episode determinism or production visual/performance parity.
+The separate [native/WASM public observer proof](observer_wasm_readme.md) checks
+the compiled headless public seam without rerunning this frame experiment.
